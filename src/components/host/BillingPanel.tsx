@@ -1,31 +1,27 @@
 import { useEffect, useState } from 'react'
-import { CreditCard, Check } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { ARRIVLY_CONFIG } from '../../config'
 import Loader from '../shared/Loader'
 
-interface Apartment {
-  id: string
-  name: string
-  created_at: string
+interface HostData {
+  trial_ends_at: string | null
+  subscription_status: string | null
 }
 
 export default function BillingPanel() {
-  const [apt, setApt] = useState<Apartment | null>(null)
+  const [host, setHost] = useState<HostData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) { setLoading(false); return }
       const { data } = await supabase
-        .from('apartments')
-        .select('id, name, created_at')
-        .eq('created_by', user.id)
-        .order('created_at')
-        .limit(1)
+        .from('hosts')
+        .select('trial_ends_at, subscription_status')
+        .eq('id', user.id)
         .maybeSingle()
-      setApt(data)
+      setHost(data)
       setLoading(false)
     }
     load()
@@ -33,80 +29,120 @@ export default function BillingPanel() {
 
   if (loading) return <Loader />
 
-  const daysUsed = apt ? Math.floor((Date.now() - new Date(apt.created_at).getTime()) / 86_400_000) : 0
-  const trialRemaining = Math.max(0, ARRIVLY_CONFIG.trialDays - daysUsed)
-  const trialActive = trialRemaining > 0
-  const trialPct = Math.min(100, (daysUsed / ARRIVLY_CONFIG.trialDays) * 100)
+  const trialEndsAt = host?.trial_ends_at ?? null
+  const status = host?.subscription_status ?? 'trial'
+  const trialRemaining = trialEndsAt
+    ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / 86_400_000))
+    : 0
+  const trialUsed = trialEndsAt
+    ? Math.max(0, ARRIVLY_CONFIG.trialDays - trialRemaining)
+    : ARRIVLY_CONFIG.trialDays
+  const trialPct = Math.min(100, (trialUsed / ARRIVLY_CONFIG.trialDays) * 100)
+  const trialEndDate = trialEndsAt
+    ? new Date(trialEndsAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+    : null
 
-  const features = [
-    'Personalised guest page',
-    'AI neighbourhood guide',
-    'QR code generation',
-    'Custom branding',
-    'Booking management',
-    'iCal sync',
-  ]
+  const LABEL = 'block text-[10px] uppercase tracking-[.06em] text-[#999] mb-[3px]'
 
   return (
-    <div className="max-w-lg space-y-8">
-      <h1 className="text-2xl font-bold">Billing</h1>
+    <div className="max-w-lg">
+      <h1 className="text-[17px] font-serif font-light text-[#1a1a1a] mb-4">Billing</h1>
 
-      {/* Trial status */}
-      {trialActive ? (
-        <div className="bg-white/10 border border-white/20 rounded-2xl p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-semibold">Free trial</p>
-              <p className="text-sm text-gray-400 mt-0.5">{trialRemaining} of {ARRIVLY_CONFIG.trialDays} days remaining</p>
-            </div>
-            <span className="text-xs bg-green-500/20 text-green-300 border border-green-500/30 px-2 py-1 rounded-full">Active</span>
+      {/* Trial / subscription card */}
+      {status === 'trial' && (
+        <div className="bg-white border border-[#ddd8ce] rounded-[10px] p-4 mb-4">
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-[13px] font-semibold text-[#1a1a1a]">Free trial — 1 property</div>
+            <span className="text-[10px] bg-[#e4f0da] text-[#2a5c0a] px-2 py-0.5 rounded-full font-medium">Active</span>
           </div>
-          <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+          <div className="text-[11px] text-[#888] mb-3">
+            {trialRemaining > 0
+              ? `${trialRemaining} of ${ARRIVLY_CONFIG.trialDays} days remaining`
+              : 'Trial period complete'}
+            {trialEndDate && ` · ends ${trialEndDate}`}
+          </div>
+          <div className="h-1 bg-[#ede9e2] rounded-full overflow-hidden mb-4">
             <div
-              className="h-full bg-white rounded-full transition-all"
+              className="h-full bg-[#1a1a1a] rounded-full transition-all"
               style={{ width: `${trialPct}%` }}
             />
           </div>
-          <p className="text-xs text-gray-500">
-            Your trial includes all features. Add a payment method before day {ARRIVLY_CONFIG.trialDays} to avoid interruption.
-          </p>
-        </div>
-      ) : (
-        <div className="bg-amber-500/15 border border-amber-500/30 rounded-2xl p-6">
-          <p className="font-semibold text-amber-200">Trial ended</p>
-          <p className="text-sm text-amber-300/70 mt-1">Add a payment method to continue using Arrivly.</p>
+          <button
+            className="w-full bg-[#1a1a1a] text-white py-2.5 rounded-[8px] text-xs font-semibold hover:opacity-80 transition-opacity"
+            onClick={() => alert('Stripe integration coming soon')}
+          >
+            Add card — continue for {ARRIVLY_CONFIG.currencySymbol}{ARRIVLY_CONFIG.pricePerPropertyMonthly}/month
+          </button>
         </div>
       )}
 
-      {/* Plan */}
-      <div className="border border-white/20 rounded-2xl p-6 space-y-4">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="font-semibold text-lg">Arrivly Basic</p>
-            <p className="text-gray-400 text-sm mt-0.5">1 property</p>
+      {status === 'active' && (
+        <div className="bg-white border border-[#ddd8ce] rounded-[10px] p-4 mb-4">
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-[13px] font-semibold text-[#1a1a1a]">Arrivly Basic — 1 property</div>
+            <span className="text-[10px] bg-[#e4f0da] text-[#2a5c0a] px-2 py-0.5 rounded-full font-medium">Active</span>
           </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold">{ARRIVLY_CONFIG.currencySymbol}{ARRIVLY_CONFIG.pricePerPropertyMonthly}</p>
-            <p className="text-xs text-gray-400">per month</p>
+          <div className="text-[11px] text-[#888] mb-3">
+            {ARRIVLY_CONFIG.currencySymbol}{ARRIVLY_CONFIG.pricePerPropertyMonthly}/month · renews automatically
           </div>
+          <button
+            className="w-full bg-transparent border border-[#ddd8ce] text-[#444] py-2.5 rounded-[8px] text-xs hover:bg-[#f0ede6] transition-colors"
+            onClick={() => alert('Billing portal coming soon')}
+          >
+            Manage subscription
+          </button>
         </div>
+      )}
 
-        <div className="border-t border-white/10 pt-4 space-y-2">
-          {features.map(f => (
-            <div key={f} className="flex items-center gap-2 text-sm text-gray-300">
-              <Check size={14} className="text-green-400 shrink-0" />
-              {f}
+      {(status === 'grace' || status === 'expired' || (!status && trialRemaining === 0)) && (
+        <div className="bg-[#fde4e4] border border-[#f5c6c6] rounded-[10px] p-4 mb-4">
+          <div className="text-[13px] font-semibold text-[#8a1a1a] mb-1">
+            {status === 'grace' ? 'Payment failed — grace period' : 'Subscription inactive'}
+          </div>
+          <div className="text-[11px] text-[#8a1a1a]/70 mb-3">Add a payment method to restore access.</div>
+          <button
+            className="w-full bg-[#1a1a1a] text-white py-2.5 rounded-[8px] text-xs font-semibold hover:opacity-80 transition-opacity"
+            onClick={() => alert('Stripe integration coming soon')}
+          >
+            Add card — {ARRIVLY_CONFIG.currencySymbol}{ARRIVLY_CONFIG.pricePerPropertyMonthly}/month
+          </button>
+        </div>
+      )}
+
+      {/* What happens */}
+      <div className="grid grid-cols-2 gap-2.5 mb-4">
+        <div className="bg-[#e4f0da] rounded-[10px] p-3.5">
+          <div className="text-[11px] font-semibold text-[#2a5c0a] mb-1.5">When you subscribe</div>
+          {['Guest page stays live', 'QR code works forever', 'AI guide refreshes monthly', 'Booking sync active'].map(f => (
+            <div key={f} className="text-[11px] text-[#2a5c0a] leading-[1.7]">✓ {f}</div>
+          ))}
+        </div>
+        <div className="bg-[#fde4e4] rounded-[10px] p-3.5">
+          <div className="text-[11px] font-semibold text-[#8a1a1a] mb-1.5">If you don't subscribe</div>
+          {['Guest page goes offline', 'QR code returns 404', 'All data is preserved', 'Reactivate any time'].map(f => (
+            <div key={f} className="text-[11px] text-[#8a1a1a] leading-[1.7]">· {f}</div>
+          ))}
+        </div>
+      </div>
+
+      {/* Plan states reference */}
+      <div className="bg-white border border-[#ddd8ce] rounded-[10px] p-4">
+        <label className={LABEL}>Subscription states</label>
+        <div className="mt-2 grid grid-cols-2 gap-1.5">
+          {[
+            { key: 'trial', label: 'Trial', pill: 'bg-[#dceef8] text-[#0c3d70]' },
+            { key: 'active', label: 'Active', pill: 'bg-[#e4f0da] text-[#2a5c0a]' },
+            { key: 'grace', label: 'Grace period', pill: 'bg-[#faeeda] text-[#7a4800]' },
+            { key: 'expired', label: 'Expired', pill: 'bg-[#fde4e4] text-[#8a1a1a]' },
+          ].map(s => (
+            <div key={s.key} className="flex items-center gap-2">
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${s.pill}`}>{s.label}</span>
+              <span className={`text-[10px] text-[#888] ${status === s.key ? 'font-semibold text-[#1a1a1a]' : ''}`}>
+                {status === s.key ? '← current' : ''}
+              </span>
             </div>
           ))}
         </div>
-
-        <button
-          className="w-full flex items-center justify-center gap-2 bg-white text-[#1c1c1a] py-2.5 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
-          onClick={() => alert('Stripe integration coming soon')}
-        >
-          <CreditCard size={16} />
-          {trialActive ? 'Add payment method' : 'Subscribe now'}
-        </button>
       </div>
     </div>
   )

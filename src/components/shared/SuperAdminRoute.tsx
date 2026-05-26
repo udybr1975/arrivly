@@ -9,9 +9,8 @@ export default function SuperAdminRoute() {
   const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      const email = data.session?.user?.email
-      setIsAdmin(email === ARRIVLY_CONFIG.adminEmail)
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setIsAdmin(user?.email === ARRIVLY_CONFIG.adminEmail)
       setLoading(false)
     })
   }, [])

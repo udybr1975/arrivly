@@ -1,40 +1,60 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import Loader from '../shared/Loader'
-import { LogOut, Building2, Users, Calendar } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
 
 interface HostRow {
   id: string
-  name: string
-  neighborhood: string
+  name: string | null
+  brand_name: string | null
+  contact_email: string | null
+  city: string | null
+  subscription_status: string | null
+  trial_ends_at: string | null
   created_at: string
-  created_by: string
-  booking_count?: number
 }
 
-function fmt(d: string) {
-  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+function statusPill(status: string | null) {
+  const map: Record<string, string> = {
+    trial: 'bg-[#dceef8] text-[#0c3d70]',
+    active: 'bg-[#e4f0da] text-[#2a5c0a]',
+    grace: 'bg-[#faeeda] text-[#7a4800]',
+    expired: 'bg-[#fde4e4] text-[#8a1a1a]',
+  }
+  const s = status ?? 'trial'
+  return (
+    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${map[s] ?? map.trial}`}>
+      {s.charAt(0).toUpperCase() + s.slice(1)}
+    </span>
+  )
 }
 
 export default function SuperAdmin() {
   const navigate = useNavigate()
-  const [apartments, setApartments] = useState<HostRow[]>([])
-  const [stats, setStats] = useState({ hosts: 0, properties: 0, bookings: 0 })
+  const [hosts, setHosts] = useState<HostRow[]>([])
+  const [aptCounts, setAptCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
-      const [{ data: apts }, { count: bookingCount }] = await Promise.all([
-        supabase.from('apartments').select('id, name, neighborhood, created_at, created_by').order('created_at', { ascending: false }),
-        supabase.from('bookings').select('*', { count: 'exact', head: true }),
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user || user.email !== 'udy.bar.yosef@gmail.com') { setLoading(false); return }
+
+      const [{ data: hostRows }, { data: apts }] = await Promise.all([
+        supabase
+          .from('hosts')
+          .select('id, name, brand_name, contact_email, city, subscription_status, trial_ends_at, created_at')
+          .order('created_at', { ascending: false }),
+        supabase.from('apartments').select('host_id'),
       ])
 
-      const rows = apts ?? []
-      const uniqueHosts = new Set(rows.map(a => a.created_by)).size
-
-      setApartments(rows)
-      setStats({ hosts: uniqueHosts, properties: rows.length, bookings: bookingCount ?? 0 })
+      const rows = hostRows ?? []
+      const counts: Record<string, number> = {}
+      for (const a of apts ?? []) {
+        counts[a.host_id] = (counts[a.host_id] ?? 0) + 1
+      }
+      setHosts(rows)
+      setAptCounts(counts)
       setLoading(false)
     }
     load()
@@ -47,67 +67,68 @@ export default function SuperAdmin() {
 
   if (loading) return <Loader />
 
+  const totalHosts = hosts.length
+  const paidActive = hosts.filter(h => h.subscription_status === 'active').length
+  const onTrial = hosts.filter(h => !h.subscription_status || h.subscription_status === 'trial').length
+  const mrr = paidActive * 19
+
   return (
-    <div className="min-h-screen bg-[#1c1c1a] text-white p-8">
-      <div className="max-w-5xl mx-auto space-y-8">
+    <div className="min-h-screen bg-[#f0ede6] p-8">
+      <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Arrivly Admin</h1>
-            <p className="text-gray-400 text-sm mt-0.5">Platform overview</p>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <h1 className="text-[18px] font-serif font-light text-[#1a1a1a]">Superadmin — Arrivly</h1>
+            <span className="text-[10px] bg-[#fde4e4] text-[#8a1a1a] px-2 py-0.5 rounded-full font-medium">🔒 Locked</span>
           </div>
           <button
             onClick={signOut}
-            className="flex items-center gap-2 border border-white/20 px-3 py-2 rounded-lg text-sm hover:bg-white/5 transition-colors"
+            className="bg-transparent border border-[#ddd8ce] text-[#444] px-3 py-1.5 rounded-[7px] text-xs hover:bg-white transition-colors"
           >
-            <LogOut size={14} />
             Sign out
           </button>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4">
+        {/* Metrics */}
+        <div className="grid grid-cols-4 gap-2.5 mb-6">
           {[
-            { icon: Users, label: 'Hosts', value: stats.hosts },
-            { icon: Building2, label: 'Properties', value: stats.properties },
-            { icon: Calendar, label: 'Bookings', value: stats.bookings },
-          ].map(({ icon: Icon, label, value }) => (
-            <div key={label} className="bg-white/5 border border-white/10 rounded-xl p-5">
-              <Icon size={18} className="text-gray-400 mb-3" />
-              <p className="text-2xl font-bold">{value}</p>
-              <p className="text-sm text-gray-400 mt-0.5">{label}</p>
+            { label: 'Total hosts', value: totalHosts },
+            { label: 'Paid active', value: paidActive },
+            { label: 'On trial', value: onTrial },
+            { label: 'MRR', value: `€${mrr}` },
+          ].map(m => (
+            <div key={m.label} className="bg-white border border-[#ddd8ce] rounded-[10px] p-3">
+              <div className="text-[22px] font-serif font-light text-[#1a1a1a]">{m.value}</div>
+              <div className="text-[10px] uppercase tracking-[.06em] text-[#999] mt-0.5">{m.label}</div>
             </div>
           ))}
         </div>
 
-        {/* Properties table */}
-        <div>
-          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">All properties</h2>
-          <div className="border border-white/10 rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/10 text-gray-400 text-xs uppercase tracking-wider">
-                  <th className="text-left px-4 py-3 font-medium">Property</th>
-                  <th className="text-left px-4 py-3 font-medium">Neighbourhood</th>
-                  <th className="text-left px-4 py-3 font-medium">Host ID</th>
-                  <th className="text-left px-4 py-3 font-medium">Created</th>
-                </tr>
-              </thead>
-              <tbody>
-                {apartments.map((apt, i) => (
-                  <tr
-                    key={apt.id}
-                    className={`border-b border-white/5 hover:bg-white/5 transition-colors ${i === apartments.length - 1 ? 'border-b-0' : ''}`}
-                  >
-                    <td className="px-4 py-3 font-medium">{apt.name}</td>
-                    <td className="px-4 py-3 text-gray-400">{apt.neighborhood}</td>
-                    <td className="px-4 py-3 text-gray-500 font-mono text-xs">{apt.created_by?.slice(0, 8)}…</td>
-                    <td className="px-4 py-3 text-gray-400">{fmt(apt.created_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {/* Hosts list */}
+        <div className="space-y-2">
+          <div className="text-[10px] uppercase tracking-[.06em] text-[#999] mb-2">All hosts</div>
+          {hosts.length === 0 && (
+            <div className="text-[12px] text-[#aaa] text-center py-8">No hosts yet.</div>
+          )}
+          {hosts.map(h => (
+            <div key={h.id} className="bg-white border border-[#ddd8ce] rounded-[10px] p-3 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-[7px] bg-[#1a1a1a] flex items-center justify-center text-[11px] text-white font-semibold shrink-0">
+                {(h.brand_name ?? h.name ?? '?').charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[12px] font-semibold text-[#1a1a1a] truncate">
+                  {h.brand_name ?? h.name ?? '—'}
+                </div>
+                <div className="text-[10px] text-[#888] truncate">
+                  {h.contact_email ?? '—'}{h.city ? ` · ${h.city}` : ''} · {aptCounts[h.id] ?? 0} {aptCounts[h.id] === 1 ? 'property' : 'properties'}
+                </div>
+              </div>
+              {statusPill(h.subscription_status)}
+              <button className="bg-transparent border border-[#ddd8ce] text-[#444] px-3 py-1 rounded-[6px] text-[10px] hover:bg-[#f0ede6] transition-colors shrink-0">
+                Impersonate
+              </button>
+            </div>
+          ))}
         </div>
       </div>
     </div>

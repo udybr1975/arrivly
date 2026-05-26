@@ -1,52 +1,48 @@
 import { useEffect, useRef, useState } from 'react'
 import QRCode from 'qrcode'
-import { Copy, Download, Check } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { ARRIVLY_CONFIG } from '../../config'
 import Loader from '../shared/Loader'
 
+interface ApartmentQR {
+  id: string
+  name: string
+  neighborhood: string | null
+  guide_refreshed_at?: string | null
+}
+
 export default function QRCodePanel() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [aptId, setAptId] = useState<string | null>(null)
+  const [apts, setApts] = useState<ApartmentQR[]>([])
   const [loading, setLoading] = useState(true)
-  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) { setLoading(false); return }
       const { data } = await supabase
         .from('apartments')
-        .select('id')
-        .eq('created_by', user.id)
+        .select('id, name, neighborhood')
+        .eq('host_id', user.id)
         .order('created_at')
-        .limit(1)
-        .maybeSingle()
-      if (data) setAptId(data.id)
+      setApts(data ?? [])
       setLoading(false)
     }
     load()
   }, [])
 
   useEffect(() => {
-    if (!aptId || !canvasRef.current) return
-    const url = `${ARRIVLY_CONFIG.appUrl}/guest?id=${aptId}`
+    if (!canvasRef.current || apts.length === 0) return
+    const url = `${ARRIVLY_CONFIG.appUrl}/guest?apt=${apts[0].id}`
     QRCode.toCanvas(canvasRef.current, url, {
-      width: 256,
+      width: 180,
       margin: 2,
-      color: { dark: '#1c1c1a', light: '#ffffff' },
+      color: { dark: '#1a1a1a', light: '#ffffff' },
     })
-  }, [aptId])
+  }, [apts])
 
-  function guestUrl() {
-    return `${ARRIVLY_CONFIG.appUrl}/guest?id=${aptId}`
-  }
-
-  async function copyUrl() {
-    if (!aptId) return
-    await navigator.clipboard.writeText(guestUrl())
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  function guestUrl(aptId: string) {
+    return `${ARRIVLY_CONFIG.appUrl}/guest?apt=${aptId}`
   }
 
   function download() {
@@ -57,45 +53,79 @@ export default function QRCodePanel() {
     link.click()
   }
 
+  function printCard(aptId: string) {
+    const url = guestUrl(aptId)
+    const w = window.open('', '_blank')
+    if (!w) return
+    w.document.write(`<html><body style="margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;"><img src="${canvasRef.current?.toDataURL('image/png') ?? ''}" style="width:300px"/><p style="font-family:monospace;font-size:11px;text-align:center">${url}</p></body></html>`)
+    w.document.close()
+    w.print()
+  }
+
   if (loading) return <Loader />
 
   return (
-    <div className="max-w-md space-y-8">
-      <h1 className="text-2xl font-bold">QR Code</h1>
-
-      <div className="bg-white rounded-2xl p-6 w-fit">
-        <canvas ref={canvasRef} />
+    <div className="max-w-2xl">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-[17px] font-serif font-light text-[#1a1a1a]">QR codes &amp; guides</h1>
+        <button className="bg-transparent border border-[#ddd8ce] text-[#444] px-3 py-1.5 rounded-[7px] text-xs hover:bg-[#f0ede6] transition-colors">
+          ↻ Refresh all guides
+        </button>
       </div>
 
-      {aptId && (
-        <div className="space-y-4">
-          <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3">
-            <p className="text-xs text-gray-500 mb-1">Guest page URL</p>
-            <p className="text-sm font-mono text-gray-300 break-all">{guestUrl()}</p>
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              onClick={copyUrl}
-              className="flex-1 flex items-center justify-center gap-2 border border-white/20 py-2.5 rounded-lg text-sm font-medium hover:bg-white/5 transition-colors"
-            >
-              {copied ? <Check size={15} className="text-green-400" /> : <Copy size={15} />}
-              {copied ? 'Copied!' : 'Copy URL'}
-            </button>
-            <button
-              onClick={download}
-              className="flex-1 flex items-center justify-center gap-2 bg-white text-[#1c1c1a] py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-100 transition-colors"
-            >
-              <Download size={15} />
-              Download QR
-            </button>
-          </div>
-
-          <p className="text-xs text-gray-500 text-center">
-            Print or display this QR code at your property so guests can access their welcome page.
-          </p>
-        </div>
+      {apts.length === 0 && (
+        <div className="text-center py-10 text-[#aaa] text-[12px]">No properties yet.</div>
       )}
+
+      <div className="grid grid-cols-1 gap-3">
+        {apts.map((apt, i) => (
+          <div key={apt.id} className="bg-white border border-[#ddd8ce] rounded-[10px] p-4 flex items-start gap-4">
+            <div className="shrink-0 bg-[#f8f6f2] rounded-[8px] p-2 flex items-center justify-center">
+              {i === 0
+                ? <canvas ref={canvasRef} style={{ width: 80, height: 80 }} />
+                : (
+                  <div className="w-20 h-20 flex items-center justify-center text-[#ccc] text-3xl">▦</div>
+                )
+              }
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-semibold text-[#1a1a1a] mb-0.5">{apt.name}</div>
+              {apt.neighborhood && (
+                <div className="text-[11px] text-[#888] mb-2">{apt.neighborhood}</div>
+              )}
+              <div className="bg-[#f8f6f2] rounded-[6px] px-2.5 py-1.5 mb-2">
+                <div className="text-[10px] uppercase tracking-[.06em] text-[#999] mb-0.5">Guest page URL</div>
+                <div className="text-[10px] font-mono text-[#555] break-all">{guestUrl(apt.id)}</div>
+              </div>
+              <div className="text-[10px] text-[#aaa] mb-3">
+                Guide refreshed: {apt.guide_refreshed_at
+                  ? new Date(apt.guide_refreshed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                  : 'Not generated yet'}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={download}
+                  className="bg-[#1a1a1a] text-white px-3 py-1.5 rounded-[7px] text-xs font-semibold hover:opacity-80 transition-opacity"
+                >
+                  ⬇ Download PNG
+                </button>
+                <button
+                  onClick={() => printCard(apt.id)}
+                  className="bg-transparent border border-[#ddd8ce] text-[#444] px-3 py-1.5 rounded-[7px] text-xs hover:bg-[#f0ede6] transition-colors"
+                >
+                  🖨 Print card
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Dashed add card */}
+      <div className="border border-dashed border-[#ccc] rounded-[10px] p-4 mt-3 flex items-center justify-center cursor-pointer hover:bg-white/60 transition-colors">
+        <span className="text-[12px] text-[#aaa]">+ Add another property · coming soon</span>
+      </div>
     </div>
   )
 }

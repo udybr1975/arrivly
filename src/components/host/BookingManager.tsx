@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback } from 'react'
-import { RefreshCw, Calendar } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useToast } from '../shared/Toast'
 import { api } from '../../lib/api'
@@ -16,19 +15,74 @@ interface Booking {
   guests: { first_name: string; last_name: string; email: string } | null
 }
 
-type Filter = 'upcoming' | 'past' | 'all'
-
-function statusBadge(status: string) {
-  const map: Record<string, string> = {
-    confirmed: 'bg-green-500/20 text-green-300 border-green-500/30',
-    cancelled: 'bg-red-500/20 text-red-300 border-red-500/30',
-    pending: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
-  }
-  return `text-xs px-2 py-0.5 rounded-full border ${map[status] ?? 'bg-white/10 text-gray-300 border-white/20'}`
-}
+type View = 'list' | 'cal'
 
 function fmt(d: string) {
-  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
+
+function sourceColor(source: string | null): string {
+  if (!source) return '#c97c14'
+  const s = source.toLowerCase()
+  if (s.includes('airbnb')) return '#3b6d11'
+  if (s.includes('vrbo')) return '#185fa5'
+  return '#c97c14'
+}
+
+function statusPill(status: string) {
+  const map: Record<string, string> = {
+    confirmed: 'bg-[#e4f0da] text-[#2a5c0a]',
+    cancelled: 'bg-[#fde4e4] text-[#8a1a1a]',
+    pending: 'bg-[#faeeda] text-[#7a4800]',
+  }
+  return `text-[10px] px-2 py-0.5 rounded-full font-medium ${map[status] ?? 'bg-[#f0e8ff] text-[#4a0e8f]'}`
+}
+
+function CalendarView({ bookings }: { bookings: Booking[] }) {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth()
+  const firstDay = new Date(year, month, 1).getDay()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+
+  function isBooked(day: number) {
+    const d = new Date(year, month, day).toISOString().slice(0, 10)
+    return bookings.some(b => d >= b.check_in && d < b.check_out)
+  }
+
+  const cells: (number | null)[] = []
+  for (let i = 0; i < firstDay; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+
+  return (
+    <div className="bg-white border border-[#ddd8ce] rounded-[10px] p-4">
+      <div className="text-[12px] font-semibold text-[#1a1a1a] mb-3">
+        {now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+      </div>
+      <div className="grid grid-cols-7 gap-1 mb-1">
+        {DAYS.map(d => (
+          <div key={d} className="text-center text-[10px] uppercase tracking-[.05em] text-[#999]">{d}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((day, i) => (
+          <div
+            key={i}
+            className={`aspect-square flex items-center justify-center rounded-[5px] text-[11px] ${
+              day === null
+                ? ''
+                : isBooked(day)
+                  ? 'bg-[#1a1a1a] text-white font-semibold'
+                  : 'text-[#444] hover:bg-[#f0ede6]'
+            }`}
+          >
+            {day ?? ''}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 export default function BookingManager() {
@@ -36,23 +90,25 @@ export default function BookingManager() {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
-  const [filter, setFilter] = useState<Filter>('upcoming')
+  const [view, setView] = useState<View>('list')
   const [aptId, setAptId] = useState<string | null>(null)
+  const [icalUrl, setIcalUrl] = useState('')
 
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) { setLoading(false); return }
 
     const { data: apt } = await supabase
       .from('apartments')
-      .select('id')
-      .eq('created_by', user.id)
+      .select('id, airbnb_ical_url')
+      .eq('host_id', user.id)
       .order('created_at')
       .limit(1)
       .maybeSingle()
 
     if (!apt) { setLoading(false); return }
     setAptId(apt.id)
+    setIcalUrl(apt.airbnb_ical_url ?? '')
 
     const { data } = await supabase
       .from('bookings')
@@ -83,72 +139,119 @@ export default function BookingManager() {
   if (loading) return <Loader />
 
   const today = new Date().toISOString().slice(0, 10)
-  const filtered = bookings.filter(b => {
-    if (filter === 'upcoming') return b.check_out >= today
-    if (filter === 'past') return b.check_out < today
-    return true
-  })
+  const upcoming = bookings.filter(b => b.check_out >= today)
+  const past = bookings.filter(b => b.check_out < today)
+
+  const BTN_DARK = 'bg-[#1a1a1a] text-white px-3 py-1.5 rounded-[7px] text-xs font-semibold hover:opacity-80 transition-opacity'
+  const BTN_OUT = 'bg-transparent border border-[#ddd8ce] text-[#444] px-3 py-1.5 rounded-[7px] text-xs hover:bg-[#f0ede6] transition-colors'
 
   return (
-    <div className="max-w-3xl space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Bookings</h1>
+    <div className="max-w-2xl">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-[17px] font-serif font-light text-[#1a1a1a]">Bookings</h1>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setView('list')} className={view === 'list' ? BTN_DARK : BTN_OUT}>List</button>
+          <button onClick={() => setView('cal')} className={view === 'cal' ? BTN_DARK : BTN_OUT}>Cal</button>
+        </div>
+      </div>
+
+      {view === 'cal' && <CalendarView bookings={bookings} />}
+
+      {view === 'list' && (
+        <>
+          {bookings.length === 0 && (
+            <div className="bg-white border border-[#ddd8ce] rounded-[10px] p-8 text-center">
+              <div className="text-[#ccc] text-3xl mb-2">📅</div>
+              <div className="text-[12px] text-[#aaa]">No bookings yet. Add an iCal URL below to sync.</div>
+            </div>
+          )}
+
+          {upcoming.length > 0 && (
+            <div className="mb-4">
+              <div className="text-[10px] uppercase tracking-[.06em] text-[#999] mb-2">Upcoming</div>
+              <div className="space-y-2">
+                {upcoming.map(b => (
+                  <div
+                    key={b.id}
+                    className="bg-white border border-[#ddd8ce] rounded-[10px] px-4 py-3 flex items-center gap-3"
+                    style={{ borderLeft: `3px solid ${sourceColor(b.source)}` }}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                        <span className="text-[12px] font-semibold text-[#1a1a1a]">
+                          {b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : 'Guest'}
+                        </span>
+                        <span className={statusPill(b.status)}>{b.status}</span>
+                        {b.source && (
+                          <span className="text-[10px] text-[#888] bg-[#f8f6f2] border border-[#ddd8ce] px-2 py-0.5 rounded-full">
+                            {b.source}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-[#888]">
+                        {fmt(b.check_in)} → {fmt(b.check_out)}
+                        {b.guest_count > 1 && <span className="ml-2">· {b.guest_count} guests</span>}
+                        {b.reference_number && <span className="ml-2 font-mono">· {b.reference_number}</span>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {past.length > 0 && (
+            <div>
+              <div className="text-[10px] uppercase tracking-[.06em] text-[#999] mb-2">Past</div>
+              <div className="space-y-2">
+                {past.map(b => (
+                  <div
+                    key={b.id}
+                    className="bg-white border border-[#ddd8ce] rounded-[10px] px-4 py-3 flex items-center gap-3 opacity-60"
+                    style={{ borderLeft: `3px solid ${sourceColor(b.source)}` }}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                        <span className="text-[12px] font-semibold text-[#1a1a1a]">
+                          {b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : 'Guest'}
+                        </span>
+                        {b.source && (
+                          <span className="text-[10px] text-[#888] bg-[#f8f6f2] border border-[#ddd8ce] px-2 py-0.5 rounded-full">
+                            {b.source}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-[#888]">
+                        {fmt(b.check_in)} → {fmt(b.check_out)}
+                        {b.reference_number && <span className="ml-2 font-mono">· {b.reference_number}</span>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* iCal card */}
+      <div className="bg-white border border-[#ddd8ce] rounded-[10px] p-4 mt-4">
+        <div className="text-[12px] font-semibold text-[#1a1a1a] mb-1">iCal sync</div>
+        <div className="text-[11px] text-[#888] mb-3">Paste your Airbnb / VRBO iCal URL to auto-import bookings.</div>
+        <input
+          value={icalUrl}
+          onChange={e => setIcalUrl(e.target.value)}
+          className="w-full bg-[#f8f6f2] border border-[#ddd8ce] rounded-[8px] px-3 py-2 text-xs text-[#444] focus:outline-none focus:border-[#1a1a1a] transition-colors mb-3"
+          placeholder="https://www.airbnb.com/calendar/ical/…"
+        />
         <button
           onClick={syncICal}
           disabled={syncing || !aptId}
-          className="flex items-center gap-2 border border-white/20 px-3 py-2 rounded-lg text-sm hover:bg-white/5 transition-colors disabled:opacity-40"
+          className="bg-[#1a1a1a] text-white px-4 py-2 rounded-[8px] text-xs font-semibold hover:opacity-80 transition-opacity disabled:opacity-40"
         >
-          <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
-          Sync iCal
+          {syncing ? '↻ Syncing…' : '↻ Sync now'}
         </button>
       </div>
-
-      {/* Filter tabs */}
-      <div className="flex gap-1 bg-white/5 border border-white/10 rounded-lg p-1 w-fit">
-        {(['upcoming', 'past', 'all'] as Filter[]).map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium capitalize transition-colors ${
-              filter === f ? 'bg-white text-[#1c1c1a]' : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            {f}
-          </button>
-        ))}
-      </div>
-
-      {filtered.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">
-          <Calendar size={32} className="mx-auto mb-3 opacity-40" />
-          <p>No {filter} bookings</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {filtered.map(b => (
-            <div key={b.id} className="bg-white/5 border border-white/10 rounded-xl px-4 py-4 flex items-center gap-4">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <p className="font-medium text-sm">
-                    {b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : 'Guest'}
-                  </p>
-                  <span className={statusBadge(b.status)}>{b.status}</span>
-                  {b.source && (
-                    <span className="text-xs text-gray-500 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full">
-                      {b.source}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-gray-400">
-                  {fmt(b.check_in)} → {fmt(b.check_out)}
-                  {b.guest_count > 1 && <span className="ml-2">· {b.guest_count} guests</span>}
-                  {b.reference_number && <span className="ml-2 font-mono">· {b.reference_number}</span>}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   )
 }

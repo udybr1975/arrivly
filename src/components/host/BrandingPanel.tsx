@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Check } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { ARRIVLY_CONFIG } from '../../config'
 import { useToast } from '../shared/Toast'
@@ -14,24 +13,29 @@ interface Apartment {
 export default function BrandingPanel() {
   const { toast } = useToast()
   const [apt, setApt] = useState<Apartment | null>(null)
+  const [hostId, setHostId] = useState<string | null>(null)
   const [selectedColor, setSelectedColor] = useState('#1c1c1a')
+  const [customHex, setCustomHex] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) { setLoading(false); return }
+      setHostId(user.id)
       const { data } = await supabase
         .from('apartments')
         .select('id, name, brand_color')
-        .eq('created_by', user.id)
+        .eq('host_id', user.id)
         .order('created_at')
         .limit(1)
         .maybeSingle()
       if (data) {
         setApt(data)
         setSelectedColor(data.brand_color ?? '#1c1c1a')
+        const isPreset = ARRIVLY_CONFIG.colourPresets.some(p => p.hex === (data.brand_color ?? '#1c1c1a'))
+        if (!isPreset && data.brand_color) setCustomHex(data.brand_color)
       }
       setLoading(false)
     }
@@ -39,70 +43,139 @@ export default function BrandingPanel() {
   }, [])
 
   async function save() {
-    if (!apt) return
+    if (!apt || !hostId) return
     setSaving(true)
     const { error } = await supabase
       .from('apartments')
       .update({ brand_color: selectedColor })
       .eq('id', apt.id)
+      .eq('host_id', hostId)
     if (error) toast(error.message, 'error')
     else { setApt(p => p ? { ...p, brand_color: selectedColor } : p); toast('Branding saved', 'success') }
     setSaving(false)
   }
 
+  function applyCustomHex() {
+    const hex = customHex.trim()
+    if (/^#[0-9a-fA-F]{6}$/.test(hex)) setSelectedColor(hex)
+  }
+
   if (loading) return <Loader />
 
+  const LABEL = 'block text-[10px] uppercase tracking-[.06em] text-[#999] mb-[3px]'
+
   return (
-    <div className="max-w-lg space-y-8">
-      <h1 className="text-2xl font-bold">Branding</h1>
+    <div className="max-w-2xl">
+      <h1 className="text-[17px] font-serif font-light text-[#1a1a1a] mb-4">Branding</h1>
 
-      {/* Colour presets */}
-      <section className="space-y-4">
-        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Brand colour</h2>
-        <div className="grid grid-cols-3 gap-3">
-          {ARRIVLY_CONFIG.colourPresets.map(preset => (
-            <button
-              key={preset.hex}
-              onClick={() => setSelectedColor(preset.hex)}
-              className={`flex items-center gap-3 rounded-xl p-3 border-2 transition-colors text-left ${
-                selectedColor === preset.hex ? 'border-white' : 'border-white/10 hover:border-white/30'
-              }`}
-            >
-              <div
-                className="w-8 h-8 rounded-lg shrink-0"
-                style={{ backgroundColor: preset.hex }}
-              />
-              <span className="text-sm">{preset.name}</span>
-              {selectedColor === preset.hex && (
-                <Check size={14} className="ml-auto text-white" />
-              )}
-            </button>
-          ))}
+      <div className="flex gap-4 items-start">
+        {/* Left: controls */}
+        <div className="flex-1 space-y-4">
+          <div className="bg-white border border-[#ddd8ce] rounded-[10px] p-4">
+            <label className={LABEL}>Brand colour</label>
+            <div className="grid grid-cols-3 gap-2 mt-2">
+              {ARRIVLY_CONFIG.colourPresets.map(preset => (
+                <button
+                  key={preset.hex}
+                  onClick={() => { setSelectedColor(preset.hex); setCustomHex('') }}
+                  className={`flex items-center gap-2 rounded-[8px] p-2.5 border transition-colors text-left ${
+                    selectedColor === preset.hex && !customHex
+                      ? 'border-[#1a1a1a] shadow-sm'
+                      : 'border-[#ddd8ce] hover:border-[#aaa]'
+                  }`}
+                >
+                  <div
+                    className="w-6 h-6 rounded-[5px] shrink-0"
+                    style={{ backgroundColor: preset.hex }}
+                  />
+                  <span className="text-[11px] text-[#444]">{preset.name}</span>
+                  {selectedColor === preset.hex && !customHex && (
+                    <span className="ml-auto text-[10px] text-[#1a1a1a]">✓</span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Custom hex */}
+            <div className="mt-3">
+              <label className={LABEL}>Custom hex</label>
+              <div className="flex gap-2 items-center">
+                <div className="w-8 h-8 rounded-[6px] border border-[#ddd8ce] shrink-0" style={{ backgroundColor: customHex || selectedColor }} />
+                <input
+                  value={customHex}
+                  onChange={e => setCustomHex(e.target.value)}
+                  onBlur={applyCustomHex}
+                  className="flex-1 bg-[#f8f6f2] border border-[#ddd8ce] rounded-[8px] px-3 py-2 text-xs text-[#444] font-mono focus:outline-none focus:border-[#1a1a1a] transition-colors"
+                  placeholder="#2c4a8a"
+                  maxLength={7}
+                />
+                <button
+                  onClick={applyCustomHex}
+                  className="bg-transparent border border-[#ddd8ce] text-[#444] px-3 py-2 rounded-[7px] text-xs hover:bg-[#f0ede6] transition-colors"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={save}
+            disabled={saving || selectedColor === apt?.brand_color}
+            className="bg-[#1a1a1a] text-white px-4 py-2.5 rounded-[8px] text-xs font-semibold hover:opacity-80 transition-opacity disabled:opacity-40"
+          >
+            {saving ? 'Saving…' : 'Save branding'}
+          </button>
         </div>
-      </section>
 
-      {/* Preview */}
-      <section className="space-y-4">
-        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Preview</h2>
-        <div
-          className="rounded-2xl p-6 space-y-2"
-          style={{ backgroundColor: selectedColor }}
-        >
-          <p className="text-white font-bold text-lg">{apt?.name ?? 'Your Property'}</p>
-          <p className="text-white/70 text-sm">Guest welcome page</p>
-          <div className="mt-4 bg-white/10 rounded-lg px-4 py-2">
-            <p className="text-white/60 text-xs">Powered by Arrivly</p>
+        {/* Right: phone preview */}
+        <div className="shrink-0">
+          <div className="text-[10px] uppercase tracking-[.06em] text-[#999] mb-2 text-center">Preview</div>
+          <div
+            className="relative rounded-[28px] overflow-hidden border-[3px]"
+            style={{ width: 180, borderColor: '#2a2a2a' }}
+          >
+            {/* Status bar */}
+            <div className="h-5 flex items-center justify-center" style={{ backgroundColor: selectedColor }}>
+              <div className="w-10 h-1.5 bg-black/30 rounded-full" />
+            </div>
+            {/* Hero */}
+            <div className="px-3 py-3" style={{ backgroundColor: selectedColor }}>
+              <div className="text-[10px] text-white/60 mb-0.5">Welcome</div>
+              <div className="text-[14px] font-serif font-light text-white leading-tight">
+                {apt?.name ?? 'Your property'}
+              </div>
+            </div>
+            {/* WiFi card */}
+            <div className="bg-white px-3 py-2.5 border-b border-[#f0ede6]">
+              <div className="text-[9px] uppercase tracking-[.06em] text-[#999] mb-0.5">WiFi</div>
+              <div className="text-[10px] font-semibold text-[#1a1a1a]">SunnyBCN_WiFi</div>
+              <div className="text-[10px] text-[#888]">SunnyBCN99!</div>
+            </div>
+            {/* Tabbar */}
+            <div className="bg-white px-3 py-2 flex gap-2">
+              {['Guide', 'Rules', 'Chat'].map((t, i) => (
+                <div
+                  key={t}
+                  className={`text-[9px] px-2 py-0.5 rounded-full ${i === 0 ? 'text-white font-semibold' : 'text-[#888]'}`}
+                  style={i === 0 ? { backgroundColor: selectedColor } : {}}
+                >
+                  {t}
+                </div>
+              ))}
+            </div>
+            {/* Share bar */}
+            <div className="bg-[#f8f6f2] px-3 py-2 flex items-center gap-1.5">
+              <div className="flex-1 h-4 bg-[#ede9e2] rounded-[3px]" />
+              <div className="w-6 h-4 bg-[#ede9e2] rounded-[3px]" />
+            </div>
+            {/* Home bar */}
+            <div className="bg-white h-4 flex items-center justify-center">
+              <div className="w-8 h-1 bg-[#ddd] rounded-full" />
+            </div>
           </div>
         </div>
-      </section>
-
-      <button
-        onClick={save}
-        disabled={saving || selectedColor === apt?.brand_color}
-        className="bg-white text-[#1c1c1a] px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-gray-100 transition-colors disabled:opacity-40"
-      >
-        {saving ? 'Saving…' : 'Save branding'}
-      </button>
+      </div>
     </div>
   )
 }

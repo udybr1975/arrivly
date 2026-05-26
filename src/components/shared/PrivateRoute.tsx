@@ -8,8 +8,8 @@ export default function PrivateRoute() {
   const [authed, setAuthed] = useState(false)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setAuthed(!!data.session)
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setAuthed(!!user)
       setLoading(false)
     })
   }, [])

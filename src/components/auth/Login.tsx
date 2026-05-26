@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 
+const INPUT = 'w-full bg-[#f8f6f2] border border-[#ddd8ce] rounded-[8px] px-3 py-2 text-xs text-[#444] focus:outline-none focus:border-[#1a1a1a] transition-colors'
+const LABEL = 'block text-[10px] uppercase tracking-[.06em] text-[#999] mb-[3px]'
+
 export default function Login() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
@@ -23,34 +26,32 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#1c1c1a] text-white px-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">Arrivly</h1>
-          <p className="text-gray-400">Sign in to your account</p>
+    <div className="min-h-screen flex items-center justify-center bg-[#f0ede6] px-4">
+      <div className="w-full max-w-[320px]">
+        <div className="mb-5">
+          <h1 className="text-[17px] font-serif font-light text-[#1a1a1a] mb-1">Sign in to your account</h1>
         </div>
 
-        <form onSubmit={submit} className="space-y-4">
+        <form onSubmit={submit} className="space-y-[7px]">
           <div>
-            <label className="block text-sm text-gray-300 mb-1.5">Email</label>
+            <label className={LABEL}>Email address</label>
             <input
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-white/50 transition-colors"
+              className={INPUT}
               placeholder="you@example.com"
               autoComplete="email"
               required
             />
           </div>
-
           <div>
-            <label className="block text-sm text-gray-300 mb-1.5">Password</label>
+            <label className={LABEL}>Password</label>
             <input
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-white/50 transition-colors"
+              className={INPUT}
               placeholder="••••••••"
               autoComplete="current-password"
               required
@@ -58,26 +59,22 @@ export default function Login() {
           </div>
 
           {error && (
-            <p className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
-              {error}
-            </p>
+            <p className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-white text-[#1c1c1a] py-2.5 rounded-lg font-semibold hover:bg-gray-100 transition-colors disabled:opacity-50"
+            className="w-full bg-[#1a1a1a] text-white rounded-[8px] py-[10px] text-xs font-semibold hover:opacity-80 transition-opacity disabled:opacity-40 mt-1"
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
-        </form>
 
-        <p className="text-center mt-6 text-gray-400 text-sm">
-          No account?{' '}
-          <Link to="/signup" className="text-white hover:underline">
-            Start free trial
-          </Link>
-        </p>
+          <p className="text-center pt-2 text-xs text-[#888]">
+            No account?{' '}
+            <Link to="/signup" className="text-[#1a1a1a] font-semibold underline">Start free trial</Link>
+          </p>
+        </form>
       </div>
     </div>
   )

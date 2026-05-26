@@ -13,9 +13,10 @@ const TABS = [
 
 type Tab = (typeof TABS)[number]['key']
 
-const INPUT = 'w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-white/50 transition-colors text-sm'
-const BTN_PRIMARY = 'bg-white text-[#1c1c1a] px-4 py-2 rounded-lg font-semibold text-sm hover:bg-gray-100 transition-colors disabled:opacity-50'
-const BTN_AI = 'bg-white/10 border border-white/20 text-white px-4 py-2 rounded-lg font-semibold text-sm hover:bg-white/20 transition-colors disabled:opacity-50'
+const INPUT = 'w-full bg-[#f8f6f2] border border-[#ddd8ce] rounded-[8px] px-3 py-2 text-xs text-[#444] focus:outline-none focus:border-[#1a1a1a] transition-colors'
+const LABEL = 'block text-[10px] uppercase tracking-[.06em] text-[#999] mb-[3px]'
+const BTN_DARK = 'bg-[#1a1a1a] text-white px-4 py-2 rounded-[8px] text-xs font-semibold hover:opacity-80 transition-opacity disabled:opacity-40'
+const BTN_AI = 'bg-[#1a1a1a] text-white px-4 py-2 rounded-[8px] text-xs font-semibold hover:opacity-80 transition-opacity disabled:opacity-40'
 
 export default function PropertySetup() {
   const [tab, setTab] = useState<Tab>('basic')
@@ -133,7 +134,7 @@ export default function PropertySetup() {
     }
 
     if (apartmentId) {
-      const { error } = await supabase.from('apartments').update(fields).eq('id', apartmentId)
+      const { error } = await supabase.from('apartments').update(fields).eq('id', apartmentId).eq('host_id', user.id)
       if (error) { showErr(error.message); setSaving(false); return }
     } else {
       const { data, error } = await supabase
@@ -228,17 +229,19 @@ export default function PropertySetup() {
   if (loading) return <Loader />
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <h1 className="text-2xl font-bold">Property Setup</h1>
+    <div className="max-w-2xl">
+      <h1 className="text-[17px] font-serif font-light text-[#1a1a1a] mb-4">Property setup</h1>
 
       {/* Tab bar */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-1.5 flex-wrap mb-4">
         {TABS.map(t => (
           <button
             key={t.key}
             onClick={() => { setTab(t.key); setFeedback(null) }}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              tab === t.key ? 'bg-white text-[#1c1c1a]' : 'bg-white/10 text-gray-300 hover:bg-white/20'
+            className={`px-3 py-1.5 rounded-[7px] text-xs font-medium transition-colors border ${
+              tab === t.key
+                ? 'bg-[#1a1a1a] text-white border-[#1a1a1a]'
+                : 'bg-transparent border-[#ddd8ce] text-[#666] hover:bg-[#f0ede6]'
             }`}
           >
             {t.label}
@@ -248,10 +251,10 @@ export default function PropertySetup() {
 
       {/* Save feedback */}
       {feedback && (
-        <div className={`text-sm rounded-lg px-3 py-2 ${
+        <div className={`text-xs rounded-[8px] px-3 py-2 mb-3 ${
           feedback.ok
-            ? 'bg-green-500/10 border border-green-500/30 text-green-400'
-            : 'bg-red-400/10 border border-red-400/20 text-red-400'
+            ? 'bg-[#e4f0da] border border-[#c5e0b0] text-[#2a5c0a]'
+            : 'bg-[#fde4e4] border border-[#f5c6c6] text-[#8a1a1a]'
         }`}>
           {feedback.msg}
         </div>
@@ -259,10 +262,10 @@ export default function PropertySetup() {
 
       {/* ── Tab 1: Basic info ─────────────────────────────────────────────── */}
       {tab === 'basic' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <div className="bg-white border border-[#ddd8ce] rounded-[10px] p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <label className="block text-sm text-gray-300 mb-1.5">Property name <span className="text-red-400">*</span></label>
+              <label className={LABEL}>Property name <span className="text-red-500 normal-case">*</span></label>
               <input
                 value={basic.name}
                 onChange={e => setBasic(p => ({ ...p, name: e.target.value }))}
@@ -272,7 +275,7 @@ export default function PropertySetup() {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-300 mb-1.5">Max guests</label>
+              <label className={LABEL}>Max guests</label>
               <input
                 type="number"
                 min={1}
@@ -283,7 +286,7 @@ export default function PropertySetup() {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-300 mb-1.5">Country</label>
+              <label className={LABEL}>Country</label>
               <input
                 value={basic.country}
                 onChange={e => setBasic(p => ({ ...p, country: e.target.value }))}
@@ -292,7 +295,7 @@ export default function PropertySetup() {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-300 mb-1.5">City</label>
+              <label className={LABEL}>City</label>
               <input
                 value={basic.city}
                 onChange={e => setBasic(p => ({ ...p, city: e.target.value }))}
@@ -300,8 +303,8 @@ export default function PropertySetup() {
                 placeholder="Barcelona"
               />
             </div>
-            <div className="col-span-2">
-              <label className="block text-sm text-gray-300 mb-1.5">Neighbourhood</label>
+            <div>
+              <label className={LABEL}>Neighbourhood</label>
               <input
                 value={basic.neighborhood}
                 onChange={e => setBasic(p => ({ ...p, neighborhood: e.target.value }))}
@@ -310,7 +313,7 @@ export default function PropertySetup() {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-300 mb-1.5">Street name</label>
+              <label className={LABEL}>Street name</label>
               <input
                 value={basic.street}
                 onChange={e => setBasic(p => ({ ...p, street: e.target.value }))}
@@ -319,7 +322,7 @@ export default function PropertySetup() {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-300 mb-1.5">Street number</label>
+              <label className={LABEL}>Street number</label>
               <input
                 value={basic.streetNumber}
                 onChange={e => setBasic(p => ({ ...p, streetNumber: e.target.value }))}
@@ -328,9 +331,7 @@ export default function PropertySetup() {
               />
             </div>
             <div className="col-span-2">
-              <label className="block text-sm text-gray-300 mb-1.5">
-                Floor / entrance note <span className="text-gray-500 font-normal">(optional)</span>
-              </label>
+              <label className={LABEL}>Floor / entrance note <span className="text-[#aaa] normal-case">(optional)</span></label>
               <input
                 value={basic.floorNote}
                 onChange={e => setBasic(p => ({ ...p, floorNote: e.target.value }))}
@@ -339,8 +340,10 @@ export default function PropertySetup() {
               />
             </div>
           </div>
-          <p className="text-xs text-green-400/80">Full address enables a hyper-local AI guide for your exact street. Coordinates geocoded once and stored.</p>
-          <button onClick={saveBasic} disabled={saving || !basic.name.trim()} className={BTN_PRIMARY}>
+          <div className="bg-[#e4f0da] rounded-[7px] px-3 py-2 text-[11px] text-[#2a5c0a] leading-[1.6]">
+            Full address enables a hyper-local AI guide for your exact street. Coordinates geocoded once and stored.
+          </div>
+          <button onClick={saveBasic} disabled={saving || !basic.name.trim()} className={BTN_DARK}>
             {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
@@ -348,9 +351,9 @@ export default function PropertySetup() {
 
       {/* ── Tab 2: WiFi ───────────────────────────────────────────────────── */}
       {tab === 'wifi' && (
-        <div className="space-y-4">
+        <div className="bg-white border border-[#ddd8ce] rounded-[10px] p-4 space-y-3">
           <div>
-            <label className="block text-sm text-gray-300 mb-1.5">Network name (SSID)</label>
+            <label className={LABEL}>Network name (SSID)</label>
             <input
               value={wifi.ssid}
               onChange={e => setWifi(p => ({ ...p, ssid: e.target.value }))}
@@ -359,7 +362,7 @@ export default function PropertySetup() {
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-300 mb-1.5">Password</label>
+            <label className={LABEL}>Password</label>
             <input
               value={wifi.password}
               onChange={e => setWifi(p => ({ ...p, password: e.target.value }))}
@@ -367,8 +370,10 @@ export default function PropertySetup() {
               placeholder="SunnyBCN99!"
             />
           </div>
-          <p className="text-xs text-green-400/80">Shown as a large copyable card on the guest page. One tap copies the password.</p>
-          <button onClick={saveWifi} disabled={saving} className={BTN_PRIMARY}>
+          <div className="bg-[#e4f0da] rounded-[7px] px-3 py-2 text-[11px] text-[#2a5c0a] leading-[1.6]">
+            Shown as a large copyable card on the guest page. One tap copies the password.
+          </div>
+          <button onClick={saveWifi} disabled={saving} className={BTN_DARK}>
             {saving ? 'Saving…' : 'Save WiFi'}
           </button>
         </div>
@@ -376,17 +381,15 @@ export default function PropertySetup() {
 
       {/* ── Tab 3: Check-in ───────────────────────────────────────────────── */}
       {tab === 'checkin' && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <h2 className="font-semibold text-white">Check-in info</h2>
-            <span className="px-2 py-0.5 bg-red-400/10 border border-red-400/20 text-red-400 text-xs font-semibold rounded-full">
-              Private
-            </span>
+        <div className="bg-white border border-[#ddd8ce] rounded-[10px] p-4 space-y-3">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[12px] font-semibold text-[#1a1a1a]">Check-in info</span>
+            <span className="text-[10px] bg-[#fde4e4] text-[#8a1a1a] px-2 py-0.5 rounded-full font-medium">Private</span>
           </div>
-          <p className="text-xs text-gray-500">Only shown to guests with a verified booking token.</p>
-          <div className="grid grid-cols-2 gap-4">
+          <p className="text-[11px] text-[#888]">Only shown to guests with a verified booking token.</p>
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm text-gray-300 mb-1.5">Check-in from</label>
+              <label className={LABEL}>Check-in from</label>
               <input
                 value={checkin.checkInFrom}
                 onChange={e => setCheckin(p => ({ ...p, checkInFrom: e.target.value }))}
@@ -395,7 +398,7 @@ export default function PropertySetup() {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-300 mb-1.5">Check-out by</label>
+              <label className={LABEL}>Check-out by</label>
               <input
                 value={checkin.checkOutBy}
                 onChange={e => setCheckin(p => ({ ...p, checkOutBy: e.target.value }))}
@@ -405,7 +408,7 @@ export default function PropertySetup() {
             </div>
           </div>
           <div>
-            <label className="block text-sm text-gray-300 mb-1.5">Door code</label>
+            <label className={LABEL}>Door code</label>
             <input
               value={checkin.doorCode}
               onChange={e => setCheckin(p => ({ ...p, doorCode: e.target.value }))}
@@ -414,7 +417,7 @@ export default function PropertySetup() {
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-300 mb-1.5">Entry instructions</label>
+            <label className={LABEL}>Entry instructions</label>
             <textarea
               value={checkin.entryInstructions}
               onChange={e => setCheckin(p => ({ ...p, entryInstructions: e.target.value }))}
@@ -423,7 +426,7 @@ export default function PropertySetup() {
               placeholder="Key safe on left of main door. Enter code 1234# and press button. Take both keys inside."
             />
           </div>
-          <button onClick={saveCheckin} disabled={saving} className={BTN_PRIMARY}>
+          <button onClick={saveCheckin} disabled={saving} className={BTN_DARK}>
             {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
@@ -431,12 +434,12 @@ export default function PropertySetup() {
 
       {/* ── Tab 4: House rules ────────────────────────────────────────────── */}
       {tab === 'rules' && (
-        <div className="space-y-4">
-          <p className="text-xs text-gray-500">
+        <div className="bg-white border border-[#ddd8ce] rounded-[10px] p-4 space-y-3">
+          <p className="text-[11px] text-[#888]">
             Paste your raw rules. Gemini rewrites them in a warm, friendly tone with no bullet points.
           </p>
           <div>
-            <label className="block text-sm text-gray-300 mb-1.5">Your raw rules</label>
+            <label className={LABEL}>Your raw rules</label>
             <textarea
               value={rawRules}
               onChange={e => setRawRules(e.target.value)}
@@ -449,16 +452,16 @@ export default function PropertySetup() {
             {rewriting ? 'Rewriting…' : '✦ Rewrite with AI'}
           </button>
           {(polishedRules || rewriting) && (
-            <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-              <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">AI result — preview</p>
+            <div className="bg-[#f8f6f2] border border-[#ddd8ce] rounded-[8px] p-3">
+              <p className="text-[10px] uppercase tracking-[.06em] text-[#999] mb-2">AI result — preview</p>
               {rewriting ? (
-                <p className="text-sm text-gray-400 italic">Rewriting…</p>
+                <p className="text-xs text-[#888] italic">Rewriting…</p>
               ) : (
-                <p className="text-sm text-gray-200 italic leading-relaxed">"{polishedRules}"</p>
+                <p className="text-xs text-[#555] italic leading-relaxed font-serif">"{polishedRules}"</p>
               )}
             </div>
           )}
-          <button onClick={saveRules} disabled={saving || !rawRules.trim()} className={BTN_PRIMARY}>
+          <button onClick={saveRules} disabled={saving || !rawRules.trim()} className={BTN_DARK}>
             {saving ? 'Saving…' : 'Save rules'}
           </button>
         </div>
@@ -466,12 +469,12 @@ export default function PropertySetup() {
 
       {/* ── Tab 5: Extras ─────────────────────────────────────────────────── */}
       {tab === 'extras' && (
-        <div className="space-y-4">
-          <p className="text-xs text-gray-500">
+        <div className="bg-white border border-[#ddd8ce] rounded-[10px] p-4 space-y-3">
+          <p className="text-[11px] text-[#888]">
             Paste everything at once. AI identifies topics and splits into categories: Parking, Bins, Appliances, Transport etc.
           </p>
           <div>
-            <label className="block text-sm text-gray-300 mb-1.5">Paste all your property info here</label>
+            <label className={LABEL}>Paste all your property info here</label>
             <textarea
               value={extrasContent}
               onChange={e => setExtrasContent(e.target.value)}
@@ -484,11 +487,11 @@ export default function PropertySetup() {
             {importing ? 'Importing…' : '✦ AI bulk import'}
           </button>
           {importResult && (
-            <div className="bg-white/5 border border-white/10 rounded-xl p-4 text-sm text-gray-400 leading-relaxed">
+            <div className="bg-[#f8f6f2] border border-[#ddd8ce] rounded-[8px] p-3 text-xs text-[#666] leading-relaxed">
               AI splits into categories:{' '}
               {importResult.split(' · ').map((cat, i, arr) => (
                 <span key={cat}>
-                  <strong className="text-white">{cat}</strong>
+                  <strong className="text-[#1a1a1a]">{cat}</strong>
                   {i < arr.length - 1 && ' · '}
                 </span>
               ))}
