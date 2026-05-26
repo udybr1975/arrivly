@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 
 export default function Signup() {
   const navigate = useNavigate()
+  const [firstName, setFirstName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -13,7 +14,11 @@ export default function Signup() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const { error } = await supabase.auth.signUp({ email, password })
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { first_name: firstName.trim() } },
+    })
     if (error) {
       setError(error.message)
       setLoading(false)
@@ -31,6 +36,20 @@ export default function Signup() {
         </div>
 
         <form onSubmit={submit} className="space-y-4">
+          <div>
+            <label className="block text-sm text-gray-300 mb-1.5">First name</label>
+            <input
+              type="text"
+              value={firstName}
+              onChange={e => setFirstName(e.target.value)}
+              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-white/50 transition-colors"
+              placeholder="First name"
+              autoComplete="given-name"
+              minLength={2}
+              required
+            />
+          </div>
+
           <div>
             <label className="block text-sm text-gray-300 mb-1.5">Email</label>
             <input
