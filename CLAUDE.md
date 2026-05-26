@@ -6,7 +6,7 @@ Arrivly is a multi-tenant SaaS platform for short-term rental hosts. Each host s
 **Pricing:** €19/property/month · 30-day free trial  
 **Stack:** React 19 + Vite + TypeScript + Tailwind CSS · Supabase (auth + DB) · Vercel (host)  
 **Repo:** https://github.com/udybr1975/arrivly  
-**Supabase project:** bdfvubwnxuzlcngzhiwy (eu-west-2)  
+**Supabase project:** ptkabdelgxkgfslfialx (eu-central-1)  
 **Admin email:** udy.bar.yosef@gmail.com  
 **App URL:** https://arrivly.anna-stays.fi
 
@@ -16,7 +16,7 @@ Arrivly is a multi-tenant SaaS platform for short-term rental hosts. Each host s
 | `/` | Landing | public |
 | `/login` | Login | public |
 | `/signup` | Signup | public |
-| `/guest?id=APARTMENT_ID` | GuestPage | public |
+| `/guest?apt=UUID` | GuestPage | public |
 | `/onboarding` | OnboardingFlow | protected |
 | `/dashboard` | Dashboard | protected |
 | `/dashboard/property` | PropertySetup | protected |
