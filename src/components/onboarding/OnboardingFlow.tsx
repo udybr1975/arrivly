@@ -39,7 +39,8 @@ export default function OnboardingFlow() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not logged in')
-      const { error: err } = await supabase
+
+      const { error: hostErr } = await supabase
         .from('hosts')
         .upsert({
           id: user.id,
@@ -53,7 +54,29 @@ export default function OnboardingFlow() {
           street: s2.street,
           street_number: s2.streetNumber,
         })
-      if (err) throw err
+      if (hostErr) throw hostErr
+
+      const { data: existing } = await supabase
+        .from('apartments')
+        .select('id')
+        .eq('host_id', user.id)
+        .limit(1)
+        .maybeSingle()
+
+      if (!existing) {
+        const { error: aptErr } = await supabase.from('apartments').insert({
+          host_id: user.id,
+          name: s1.brandName,
+          country: s2.country,
+          city: s2.city,
+          neighborhood: s2.neighborhood,
+          street: s2.street,
+          street_number: s2.streetNumber,
+          is_visible: false,
+        })
+        if (aptErr) throw aptErr
+      }
+
       navigate('/dashboard/property')
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Something went wrong')
