@@ -1,7 +1,7 @@
 # Arrivly — CLAUDE.md
 
 ## What is Arrivly?
-Arrivly is a multi-tenant SaaS platform for short-term rental hosts. Each host sets up their property and gets a personalised branded guest page accessible via QR code. The guest page shows check-in info, WiFi, house rules, and an AI-generated neighbourhood guide.
+Arrivly is a multi-tenant SaaS platform for short-term rental hosts. Each host sets up their property and gets a personalised branded guest page accessible via QR code. The guest page shows check-in info, WiFi, house rules, host picks, and an AI-generated neighbourhood guide.
 
 **Pricing:** €19/property/month · 30-day free trial  
 **Stack:** React 19 + Vite + TypeScript + Tailwind CSS · Supabase (auth + DB) · Vercel (host)  
@@ -27,17 +27,25 @@ Arrivly is a multi-tenant SaaS platform for short-term rental hosts. Each host s
 | `/admin` | SuperAdmin | admin only |
 
 ## Database (Supabase)
-- **hosts** — id (= auth.uid), name, brand_name, whatsapp, contact_email, country, city, neighborhood, street, street_number, trial_ends_at, subscription_status, created_at
-- **apartments** — id, host_id, name, country, city, neighborhood, street, street_number, floor_note, max_guests, brand_color, airbnb_ical_url, created_at
+- **hosts** — id (= auth.uid), name, brand_name, whatsapp, logo_url, accent_color, contact_email, country, city, neighborhood, street, street_number, lat, lng, plan, trial_ends_at, subscription_status, stripe_customer_id, stripe_subscription_id, push_endpoint, created_at
+- **apartments** — id, host_id, name, country, city, neighborhood, street, street_number, floor_note, lat, lng, max_guests, description, images[], is_visible, accent_color, ical_urls, created_at
 - **apartment_details** — id, apartment_id, category, content, is_private
-- **bookings** — id, apartment_id, guest_id, check_in, check_out, status, reference_number, source
-- **guests** — id, first_name, last_name, email
+- **host_picks** — id, apartment_id, name, category, address, lat, lng, note, display_order, created_at
+- **bookings** — id, apartment_id, guest_id, check_in, check_out, status, reference_number, source, created_at
+- **guests** — id, first_name, last_name, email, created_at
 - **guide_recommendations** — id, apartment_id, neighborhood, categories (jsonb), generated_at
+- **push_subscriptions** — id, host_id, apartment_id, role, endpoint, p256dh, auth_key, created_at
 - **guest_optins** — id, first_name, email, apartment_id, opted_in_at
-- **ugc_submissions** — id, booking_id, screenshot_url, status
+
+### Critical DB facts
+- `apartments.accent_color` — NOT brand_color (common mistake, causes silent save failure)
+- `apartments.ical_urls` — single text column, one URL per line, no limit (replaces old airbnb_ical_url)
+- `bookings.reference_number` — is the guest token, used in QR URL
+- `guide_recommendations` — always query with `.maybeSingle()` never `.single()`
+- RLS on `host_picks` joins through `apartments.host_id` — correct, verified
 
 ## Config
-All pricing and branding settings are in `src/config.ts`. Change there only.  
+All pricing and branding settings are in `src/config.ts`. Change there only.
 Colour presets for BrandingPanel are in `ARRIVLY_CONFIG.colourPresets`.
 
 ## Design System
@@ -54,80 +62,49 @@ Colour presets for BrandingPanel are in `ARRIVLY_CONFIG.colourPresets`.
 - Text primary: `text-[#1a1a1a]`
 - Text muted: `text-[#888]`
 
-## Session 1 Progress Checklist
-
-### Infrastructure (complete)
-- [x] Vite + React + TypeScript + Tailwind scaffold
-- [x] Supabase schema (all tables + RLS policies)
-- [x] Config file (`src/config.ts`)
-- [x] API lib (`src/lib/api.ts`)
-- [x] Supabase client (`src/lib/supabase.ts`)
-- [x] Geocode lib, Maps lib, Webpush lib
-- [x] Shared: Loader, PrivateRoute, SuperAdminRoute
-- [x] All API route stubs in `/api/`
-- [x] GitHub repo (https://github.com/udybr1975/arrivly)
-- [x] App router (`App.tsx` with all routes)
-- [x] Supabase migration: add `brand_color` to apartments
-
-### UI Components (Session 1) — superseded by Session 2 redesign
-- [x] Toast notification system (`src/components/shared/Toast.tsx`)
-- [x] Dashboard Layout with sidebar (`src/components/shared/Layout.tsx`)
-- [x] Login page (`src/components/auth/Login.tsx`)
-- [x] Signup page (`src/components/auth/Signup.tsx`)
-- [x] Onboarding wizard (`src/components/onboarding/OnboardingFlow.tsx`)
-- [x] Host Dashboard (`src/components/host/Dashboard.tsx`)
-- [x] Property Setup (`src/components/host/PropertySetup.tsx`)
-- [x] Booking Manager (`src/components/host/BookingManager.tsx`)
-- [x] QR Code Panel (`src/components/host/QRCodePanel.tsx`)
-- [x] Branding Panel (`src/components/host/BrandingPanel.tsx`)
-- [x] Billing Panel (`src/components/host/BillingPanel.tsx`)
-- [x] Guest Page (`src/components/guest/GuestPage.tsx`)
-- [x] Super Admin (`src/components/admin/SuperAdmin.tsx`)
-- [x] Updated App.tsx (ToastProvider + Layout route wrapper)
-
-## Session 1 Status: COMPLETE ✓
-All components built and verified with `vite build` (no TypeScript errors). Next: connect env vars, deploy to Vercel, implement API routes (sync-ical, generate-guide).
+## Test Data (in DB)
+- **Test Apartment 1** — id: `aaaaaaaa-0000-0000-0000-000000000001`, Kallio Helsinki, accent #5a1a2a (Wine)
+- **Test booking** — token: `ARR-TEST01`, check_in: 2026-05-27, check_out: 2026-05-31, guest: Udy
+- **Test URL:** `/guest?apt=aaaaaaaa-0000-0000-0000-000000000001&token=ARR-TEST01`
+- **Sweet home** — id: `d9614d11-d573-4ff0-961a-54c5ea37c2bd`, token: `ARR-ASJZ2R`
+- **Penthouse in the sky** — id: `9b03a763-3ca6-4d1f-946c-d4e1f977d614`, token: `ARR-PENTH1`
 
 ---
 
-## Session 2 Progress (May 26, 2026)
-
-### Infrastructure fixes (complete)
-- [x] Schema rebuilt to match spec — all 9 tables correct, RLS on all
-- [x] hosts.id = auth.uid (was separate UUID + user_id)
-- [x] Trigger on_auth_user_created — auto-creates hosts row on signup
-- [x] 4 subagents committed to .claude/agents/ (code-reviewer, debugger, dead-code-cleaner, security-auditor)
-- [x] Fixed .env.example — removed VITE_ from server-side secrets
-- [x] Geocoding moved to server-side api/geocode.ts
-- [x] vite.config.ts — qrcode aliased to browser build (fixes Android Chrome blank page)
-- [x] Vercel env vars set, domain arrivly.anna-stays.fi live with SSL
-
-### UI Components (Session 2) — COMPLETE
-- [x] All 12 screens redesigned to cream design system (#f0ede6)
-- [x] Landing page — hero + feature grid + pricing strip
-- [x] Signup — terms checkbox, first name, correct trigger metadata
-- [x] Login — cream design
-- [x] OnboardingFlow — 3 correct steps (Brand/Location/Preview), updates hosts row
-- [x] Layout — sidebar with emoji nav, trial widget, brand name from hosts table
-- [x] Dashboard — 3 metrics, property card with completeness row, host_id query
-- [x] PropertySetup — 5 tabs (Basic/WiFi/Check-in/House rules/Extras AI)
-- [x] BookingManager — list/calendar toggle, source-colored cards, iCal section
-- [x] QRCodePanel — property cards with QR placeholder, download/print buttons
-- [x] BrandingPanel — 6 colour presets, custom hex, live phone preview
-- [x] BillingPanel — trial progress bar, what-happens cards, 4-state grid
-- [x] SuperAdmin — metrics, host list with status pills
-
-### Known pending (Session 3)
-- [ ] GuestPage — full rewrite matching Anna's Stays logic (token flow, 4 tabs, weather, WiFi parser, chatbot, explore, more)
-- [ ] api/rewrite-rules.ts — real Gemini implementation
-- [ ] api/bulk-import.ts — real Gemini implementation
-- [ ] api/generate-guide.ts — real Gemini neighbourhood guide
-- [ ] api/generate-host-picks.ts — Gemini place identification
-- [ ] api/sync-ical.ts — real iCal parsing
-- [ ] Google OAuth (replace email/password signup)
-- [ ] Real QR code generation
-- [ ] Image upload (property photos + logo)
-- [ ] Stripe webhook implementation
+## Session 1 Status: COMPLETE ✓
+Scaffold, Supabase schema, all API stubs, all UI components (v1).
 
 ## Session 2 Status: COMPLETE ✓
-All infrastructure fixed. All 12 screens match mockup. App live and working on desktop and mobile. Next session starts with GuestPage rewrite.
+Full redesign to cream design system. All 12 screens. App live at arrivly.anna-stays.fi.
+
+---
+
+## Session 3 Progress (May 28, 2026)
+
+### Completed
+- [x] GuestPage — full rewrite: token flow, 4 tabs (Home/Chat/Explore/More), weather, WiFi parser, private check-in gating, host picks, guide, share bar, "Powered by Arrivly" footer, expired/neutral/thankyou states
+- [x] BookingManager — add booking form (guest name + dates → generates ARR-XXXXXX token), real iCal sync (unlimited URLs via ical_urls column, detects Airbnb/VRBO/Booking/Guesty/Hostaway/Lodgify, blocked periods handled), source labels + colours
+- [x] DB migration — replaced airbnb_ical_url with ical_urls (text, one URL per line)
+- [x] Onboarding redirect loop fixed — finish() now creates blank draft apartment if none exists
+- [x] PropertySetup — My picks tab added (tab 6): add/delete picks, saves to host_picks table
+- [x] BrandingPanel — fixed accent_color bug (was querying brand_color, silent save failure)
+- [x] SUPABASE_SERVICE_ROLE_KEY added to Vercel env vars — unblocks all server-side API routes
+
+### Known bugs / tech debt
+- [ ] QR panel uses single canvasRef — only first apartment gets a real QR code
+- [ ] api/rewrite-rules.ts — still a stub, returns nothing (Gemini not wired)
+- [ ] BrandingPanel — accent_color typed as `string` in interface, should be `string | null`
+- [ ] appUrl hardcoded in config.ts — should move to VITE_APP_URL env var
+- [ ] Geocoding never called in saveBasic — lat/lng always null (breaks Take me home + weather precision)
+
+### Session 4 priority list
+1. Geocoding in saveBasic (PropertySetup) — calls api/geocode.ts on save, stores lat/lng
+2. Real Gemini in api/rewrite-rules.ts — house rules AI rewrite
+3. PWA icons — create /public/icons/icon-192.png and icon-512.png (manifest broken without them)
+4. PWA install prompt on guest page — show after 15 seconds
+5. Push subscription saving — ask permission, save to push_subscriptions table
+6. Real api/send-push.ts — web-push library with VAPID keys
+7. Notification triggers — new booking, QR scan, checkout reminder
+
+## Session 3 Status: COMPLETE ✓
+Core host flows working end-to-end. Guest page fully functional with token flow. Bookings addable manually and via iCal. My picks showing on guest Explore tab.
