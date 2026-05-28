@@ -7,7 +7,7 @@ import Loader from '../shared/Loader'
 interface Apartment {
   id: string
   name: string
-  brand_color: string
+  accent_color: string
 }
 
 export default function BrandingPanel() {
@@ -26,16 +26,16 @@ export default function BrandingPanel() {
       setHostId(user.id)
       const { data } = await supabase
         .from('apartments')
-        .select('id, name, brand_color')
+        .select('id, name, accent_color')
         .eq('host_id', user.id)
         .order('created_at')
         .limit(1)
         .maybeSingle()
       if (data) {
         setApt(data)
-        setSelectedColor(data.brand_color ?? '#1c1c1a')
-        const isPreset = ARRIVLY_CONFIG.colourPresets.some(p => p.hex === (data.brand_color ?? '#1c1c1a'))
-        if (!isPreset && data.brand_color) setCustomHex(data.brand_color)
+        setSelectedColor(data.accent_color ?? '#1c1c1a')
+        const isPreset = ARRIVLY_CONFIG.colourPresets.some(p => p.hex === (data.accent_color ?? '#1c1c1a'))
+        if (!isPreset && data.accent_color) setCustomHex(data.accent_color)
       }
       setLoading(false)
     }
@@ -43,15 +43,18 @@ export default function BrandingPanel() {
   }, [])
 
   async function save() {
-    if (!apt || !hostId) return
+    if (!apt || !hostId) {
+      toast('Set up a property first before saving branding.', 'error')
+      return
+    }
     setSaving(true)
     const { error } = await supabase
       .from('apartments')
-      .update({ brand_color: selectedColor })
+      .update({ accent_color: selectedColor })
       .eq('id', apt.id)
       .eq('host_id', hostId)
     if (error) toast(error.message, 'error')
-    else { setApt(p => p ? { ...p, brand_color: selectedColor } : p); toast('Branding saved', 'success') }
+    else { setApt(p => p ? { ...p, accent_color: selectedColor } : p); toast('Branding saved', 'success') }
     setSaving(false)
   }
 
@@ -121,7 +124,7 @@ export default function BrandingPanel() {
 
           <button
             onClick={save}
-            disabled={saving || selectedColor === apt?.brand_color}
+            disabled={saving || selectedColor === apt?.accent_color}
             className="bg-[#1a1a1a] text-white px-4 py-2.5 rounded-[8px] text-xs font-semibold hover:opacity-80 transition-opacity disabled:opacity-40"
           >
             {saving ? 'Saving…' : 'Save branding'}
