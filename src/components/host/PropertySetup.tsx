@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { api } from '../../lib/api'
 import Loader from '../shared/Loader'
@@ -9,6 +9,7 @@ const TABS = [
   { key: 'checkin', label: 'Check-in 🔒' },
   { key: 'rules',   label: 'House rules' },
   { key: 'extras',  label: 'Extras (AI import)' },
+  { key: 'picks',   label: 'My picks' },
 ] as const
 
 type Tab = (typeof TABS)[number]['key']
@@ -42,6 +43,23 @@ export default function PropertySetup() {
   const [extrasContent, setExtrasContent] = useState('')
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState('')
+
+  // Tab 6 — picks
+  const [picks, setPicks] = useState<Array<{
+    id: string
+    name: string
+    category: string
+    address: string
+    note: string
+    display_order: number
+    lat: number | null
+    lng: number | null
+  }>>([])
+  const [picksLoading, setPicksLoading] = useState(false)
+  const [addingPick, setAddingPick] = useState(false)
+  const [pickForm, setPickForm] = useState({
+    name: '', category: 'Restaurant', address: '', note: ''
+  })
 
   useEffect(() => {
     async function load() {
@@ -105,6 +123,23 @@ export default function PropertySetup() {
     }
     load()
   }, [])
+
+  const loadPicks = useCallback(async () => {
+    if (!apartmentId) return
+    setPicksLoading(true)
+    const { data } = await supabase
+      .from('host_picks')
+      .select('id, name, category, address, lat, lng, note, display_order')
+      .eq('apartment_id', apartmentId)
+      .order('display_order')
+    setPicks(data ?? [])
+    setPicksLoading(false)
+  }, [apartmentId])
+
+  useEffect(() => {
+    if (tab !== 'picks' || !apartmentId) return
+    loadPicks()
+  }, [tab, apartmentId, loadPicks])
 
   function showOk() {
     setFeedback({ ok: true, msg: 'Saved ✓' })
@@ -224,6 +259,35 @@ export default function PropertySetup() {
     } catch { /* stub — result shown regardless */ }
     setImportResult('Parking · Recycling · Appliances · Transport · Amenities')
     setImporting(false)
+  }
+
+  async function savePick() {
+    if (!apartmentId || !pickForm.name.trim()) return
+    setAddingPick(true)
+    const nextOrder = picks.length > 0 ? Math.max(...picks.map(p => p.display_order)) + 1 : 1
+    const { error } = await supabase.from('host_picks').insert({
+      apartment_id: apartmentId,
+      name: pickForm.name.trim(),
+      category: pickForm.category,
+      address: pickForm.address.trim() || null,
+      note: pickForm.note.trim() || null,
+      display_order: nextOrder,
+      lat: null,
+      lng: null,
+    })
+    if (error) showErr(error.message)
+    else {
+      setPickForm({ name: '', category: 'Restaurant', address: '', note: '' })
+      showOk()
+      await loadPicks()
+    }
+    setAddingPick(false)
+  }
+
+  async function deletePick(id: string) {
+    const { error } = await supabase.from('host_picks').delete().eq('id', id).eq('apartment_id', apartmentId)
+    if (error) { showErr(error.message); return }
+    await loadPicks()
   }
 
   if (loading) return <Loader />
@@ -496,6 +560,100 @@ export default function PropertySetup() {
                 </span>
               ))}
               . Each saved as a separate apartment_details row. You can edit or delete any row after import.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Tab 6: My picks ───────────────────────────────────────────────── */}
+      {tab === 'picks' && (
+        <div className="space-y-3">
+          <p className="text-[11px] text-[#888]">
+            Add your favourite local places. They appear in the Explore tab on the guest page with a Navigate button.
+          </p>
+
+          {/* Add pick form */}
+          <div className="bg-white border border-[#ddd8ce] rounded-[10px] p-4 space-y-3">
+            <div className="text-[12px] font-semibold text-[#1a1a1a]">Add a place</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className={LABEL}>Place name <span className="text-red-500 normal-case">*</span></label>
+                <input
+                  value={pickForm.name}
+                  onChange={e => setPickForm(p => ({ ...p, name: e.target.value }))}
+                  className={INPUT}
+                  placeholder="Cafe Kuppi"
+                />
+              </div>
+              <div>
+                <label className={LABEL}>Category</label>
+                <select
+                  value={pickForm.category}
+                  onChange={e => setPickForm(p => ({ ...p, category: e.target.value }))}
+                  className={INPUT}
+                >
+                  {['Restaurant', 'Bar', 'Coffee', 'Sight', 'Essential', 'Nightlife'].map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={LABEL}>Address (optional)</label>
+                <input
+                  value={pickForm.address}
+                  onChange={e => setPickForm(p => ({ ...p, address: e.target.value }))}
+                  className={INPUT}
+                  placeholder="Fleminginkatu 12"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className={LABEL}>Your note (optional)</label>
+                <input
+                  value={pickForm.note}
+                  onChange={e => setPickForm(p => ({ ...p, note: e.target.value }))}
+                  className={INPUT}
+                  placeholder="Best oat latte in the neighbourhood"
+                />
+              </div>
+            </div>
+            <div className="bg-[#dceef8] rounded-[7px] px-3 py-2 text-[11px] text-[#0c3d70] leading-[1.6]">
+              Address is saved as text. Coordinates will be geocoded automatically when geocoding is enabled.
+            </div>
+            <button
+              onClick={savePick}
+              disabled={addingPick || !apartmentId || !pickForm.name.trim()}
+              className={BTN_DARK}
+            >
+              {addingPick ? 'Saving…' : '+ Add place'}
+            </button>
+          </div>
+
+          {/* Picks list */}
+          {picksLoading ? (
+            <div className="text-[11px] text-[#aaa] text-center py-4">Loading…</div>
+          ) : picks.length === 0 ? (
+            <div className="text-center py-6 text-[#aaa] text-[11px]">No picks yet. Add your first place above.</div>
+          ) : (
+            <div className="space-y-2">
+              {picks.map(pick => (
+                <div key={pick.id} className="bg-white border border-[#ddd8ce] rounded-[10px] px-4 py-3 flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-[12px] font-semibold text-[#1a1a1a]">{pick.name}</span>
+                      <span className="text-[10px] bg-[#f0e8ff] text-[#4a0e8f] px-2 py-0.5 rounded-full">{pick.category}</span>
+                      {pick.lat !== null && <span className="text-[10px] text-[#2a5c0a]">📍</span>}
+                    </div>
+                    {pick.address && <div className="text-[11px] text-[#888]">{pick.address}</div>}
+                    {pick.note && <div className="text-[11px] text-[#aaa] italic">{pick.note}</div>}
+                  </div>
+                  <button
+                    onClick={() => deletePick(pick.id)}
+                    className="text-[#ccc] hover:text-[#8a1a1a] transition-colors text-xs shrink-0"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
             </div>
           )}
         </div>
