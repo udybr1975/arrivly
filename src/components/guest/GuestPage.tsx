@@ -147,8 +147,6 @@ export default function GuestPage() {
   const [thankYouName, setThankYouName] = useState<string | null>(null)
 
   const [weather, setWeather] = useState<Weather | null>(null)
-  const [polishedRules, setPolishedRules] = useState<string | null>(null)
-  const [rulesLoading, setRulesLoading] = useState(false)
   const [guideLoading, setGuideLoading] = useState(false)
 
   const [copiedWifi, setCopiedWifi] = useState(false)
@@ -338,19 +336,6 @@ export default function GuestPage() {
     [details]
   )
 
-  useEffect(() => {
-    if (!rulesRaw.trim()) return
-    setRulesLoading(true)
-    fetch('/api/rewrite-rules', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rawRules: rulesRaw }),
-    })
-      .then(r => r.json())
-      .then(data => { if (data.text) setPolishedRules(data.text) })
-      .catch(() => {})
-      .finally(() => setRulesLoading(false))
-  }, [rulesRaw])
 
   const accentColor = apartment?.accent_color ?? ARRIVLY_CONFIG.colourPresets[0].hex
   const brandName = host?.brand_name ?? 'Your Host'
@@ -594,16 +579,9 @@ export default function GuestPage() {
               <p className="text-sm text-gray-500 italic mb-5 leading-relaxed">
                 A few small things that keep everything running smoothly.
               </p>
-              {rulesLoading ? (
-                <div className="flex items-center gap-2 text-gray-400">
-                  <RefreshCw size={14} className="animate-spin" />
-                  <span className="text-sm">Loading…</span>
-                </div>
-              ) : (
-                <p className="text-[#1c1c1a] text-sm leading-relaxed whitespace-pre-line">
-                  {polishedRules || rulesRaw}
-                </p>
-              )}
+              <p className="text-[#1c1c1a] text-sm leading-relaxed whitespace-pre-line">
+                {rulesRaw}
+              </p>
             </div>
           )}
         </div>
