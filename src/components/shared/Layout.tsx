@@ -4,7 +4,6 @@ import { supabase } from '../../lib/supabase'
 
 const NAV = [
   { to: '/dashboard',          label: 'Overview',     emoji: '📊', end: true },
-  { to: '/dashboard/property', label: 'My property',  emoji: '🏠' },
   { to: '/dashboard/bookings', label: 'Bookings',     emoji: '📅' },
   { to: '/dashboard/qr',       label: 'QR codes',     emoji: '📲' },
   { to: '/dashboard/branding', label: 'Branding',     emoji: '🎨' },

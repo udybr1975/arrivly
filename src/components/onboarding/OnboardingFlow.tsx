@@ -79,7 +79,7 @@ export default function OnboardingFlow() {
         newAptId = newApt?.id ?? null
       }
 
-      navigate(newAptId ? `/dashboard/property/${newAptId}` : '/dashboard/property')
+      navigate(newAptId ? `/dashboard/property/${newAptId}` : '/dashboard')
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Something went wrong')
       setSaving(false)

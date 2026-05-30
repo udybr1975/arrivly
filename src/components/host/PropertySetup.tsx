@@ -64,7 +64,7 @@ export default function PropertySetup() {
 
   useEffect(() => {
     async function load() {
-      if (!aptId) { navigate('/dashboard/property'); return }
+      if (!aptId) { navigate('/dashboard'); return }
 
       setLoading(true)
       setFeedback(null)
@@ -85,7 +85,7 @@ export default function PropertySetup() {
         .eq('host_id', user.id)
         .maybeSingle()
 
-      if (!apt) { navigate('/dashboard/property'); return }
+      if (!apt) { navigate('/dashboard'); return }
 
       setApartmentId(apt.id)
       setBasic({
@@ -354,7 +354,7 @@ export default function PropertySetup() {
   return (
     <div className="max-w-2xl">
       <Link
-        to="/dashboard/property"
+        to="/dashboard"
         className="inline-flex items-center gap-1 text-[11px] text-[#888] hover:text-[#1a1a1a] transition-colors mb-3"
       >
         ← Back to properties
