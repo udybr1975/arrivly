@@ -11,8 +11,85 @@ interface ApartmentQR {
   guide_refreshed_at?: string | null
 }
 
-export default function QRCodePanel() {
+function guestUrl(aptId: string) {
+  return `${ARRIVLY_CONFIG.appUrl}/guest?apt=${aptId}`
+}
+
+function slugify(s: string) {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'qr'
+}
+
+function PropertyQRCard({ apt }: { apt: ApartmentQR }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const url = guestUrl(apt.id)
+
+  useEffect(() => {
+    if (!canvasRef.current) return
+    QRCode.toCanvas(canvasRef.current, url, {
+      width: 180,
+      margin: 2,
+      color: { dark: '#1a1a1a', light: '#ffffff' },
+    })
+  }, [url])
+
+  function download() {
+    if (!canvasRef.current) return
+    const link = document.createElement('a')
+    link.download = `arrivly-qr-${slugify(apt.name)}.png`
+    link.href = canvasRef.current.toDataURL('image/png')
+    link.click()
+  }
+
+  function printCard() {
+    if (!canvasRef.current) return
+    const w = window.open('', '_blank')
+    if (!w) return
+    const img = canvasRef.current.toDataURL('image/png')
+    w.document.write(`<html><body style="margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;"><img src="${img}" style="width:300px"/><p style="font-family:monospace;font-size:11px;text-align:center">${url}</p></body></html>`)
+    w.document.close()
+    w.print()
+  }
+
+  return (
+    <div className="bg-white border border-[#ddd8ce] rounded-[10px] p-4 flex items-start gap-4">
+      <div className="shrink-0 bg-[#f8f6f2] rounded-[8px] p-2 flex items-center justify-center">
+        <canvas ref={canvasRef} aria-label={`QR code for ${apt.name}`} style={{ width: 80, height: 80 }} />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] font-semibold text-[#1a1a1a] mb-0.5">{apt.name}</div>
+        {apt.neighborhood && (
+          <div className="text-[11px] text-[#888] mb-2">{apt.neighborhood}</div>
+        )}
+        <div className="bg-[#f8f6f2] rounded-[6px] px-2.5 py-1.5 mb-2">
+          <div className="text-[10px] uppercase tracking-[.06em] text-[#999] mb-0.5">Guest page URL</div>
+          <div className="text-[10px] font-mono text-[#555] break-all">{url}</div>
+        </div>
+        <div className="text-[10px] text-[#aaa] mb-3">
+          Guide refreshed: {apt.guide_refreshed_at
+            ? new Date(apt.guide_refreshed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+            : 'Not generated yet'}
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={download}
+            className="bg-[#1a1a1a] text-white px-3 py-1.5 rounded-[7px] text-xs font-semibold hover:opacity-80 transition-opacity"
+          >
+            ⬇ Download PNG
+          </button>
+          <button
+            onClick={printCard}
+            className="bg-transparent border border-[#ddd8ce] text-[#444] px-3 py-1.5 rounded-[7px] text-xs hover:bg-[#f0ede6] transition-colors"
+          >
+            🖨 Print card
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function QRCodePanel() {
   const [apts, setApts] = useState<ApartmentQR[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -31,37 +108,6 @@ export default function QRCodePanel() {
     load()
   }, [])
 
-  useEffect(() => {
-    if (!canvasRef.current || apts.length === 0) return
-    const url = `${ARRIVLY_CONFIG.appUrl}/guest?apt=${apts[0].id}`
-    QRCode.toCanvas(canvasRef.current, url, {
-      width: 180,
-      margin: 2,
-      color: { dark: '#1a1a1a', light: '#ffffff' },
-    })
-  }, [apts])
-
-  function guestUrl(aptId: string) {
-    return `${ARRIVLY_CONFIG.appUrl}/guest?apt=${aptId}`
-  }
-
-  function download() {
-    if (!canvasRef.current) return
-    const link = document.createElement('a')
-    link.download = 'arrivly-qr.png'
-    link.href = canvasRef.current.toDataURL('image/png')
-    link.click()
-  }
-
-  function printCard(aptId: string) {
-    const url = guestUrl(aptId)
-    const w = window.open('', '_blank')
-    if (!w) return
-    w.document.write(`<html><body style="margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;"><img src="${canvasRef.current?.toDataURL('image/png') ?? ''}" style="width:300px"/><p style="font-family:monospace;font-size:11px;text-align:center">${url}</p></body></html>`)
-    w.document.close()
-    w.print()
-  }
-
   if (loading) return <Loader />
 
   return (
@@ -78,47 +124,8 @@ export default function QRCodePanel() {
       )}
 
       <div className="grid grid-cols-1 gap-3">
-        {apts.map((apt, i) => (
-          <div key={apt.id} className="bg-white border border-[#ddd8ce] rounded-[10px] p-4 flex items-start gap-4">
-            <div className="shrink-0 bg-[#f8f6f2] rounded-[8px] p-2 flex items-center justify-center">
-              {i === 0
-                ? <canvas ref={canvasRef} style={{ width: 80, height: 80 }} />
-                : (
-                  <div className="w-20 h-20 flex items-center justify-center text-[#ccc] text-3xl">▦</div>
-                )
-              }
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <div className="text-[13px] font-semibold text-[#1a1a1a] mb-0.5">{apt.name}</div>
-              {apt.neighborhood && (
-                <div className="text-[11px] text-[#888] mb-2">{apt.neighborhood}</div>
-              )}
-              <div className="bg-[#f8f6f2] rounded-[6px] px-2.5 py-1.5 mb-2">
-                <div className="text-[10px] uppercase tracking-[.06em] text-[#999] mb-0.5">Guest page URL</div>
-                <div className="text-[10px] font-mono text-[#555] break-all">{guestUrl(apt.id)}</div>
-              </div>
-              <div className="text-[10px] text-[#aaa] mb-3">
-                Guide refreshed: {apt.guide_refreshed_at
-                  ? new Date(apt.guide_refreshed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-                  : 'Not generated yet'}
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={download}
-                  className="bg-[#1a1a1a] text-white px-3 py-1.5 rounded-[7px] text-xs font-semibold hover:opacity-80 transition-opacity"
-                >
-                  ⬇ Download PNG
-                </button>
-                <button
-                  onClick={() => printCard(apt.id)}
-                  className="bg-transparent border border-[#ddd8ce] text-[#444] px-3 py-1.5 rounded-[7px] text-xs hover:bg-[#f0ede6] transition-colors"
-                >
-                  🖨 Print card
-                </button>
-              </div>
-            </div>
-          </div>
+        {apts.map((apt) => (
+          <PropertyQRCard key={apt.id} apt={apt} />
         ))}
       </div>
 
