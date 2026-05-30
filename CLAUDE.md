@@ -19,7 +19,7 @@ Arrivly is a multi-tenant SaaS platform for short-term rental hosts. Each host s
 | `/guest?apt=UUID` | GuestPage | public |
 | `/onboarding` | OnboardingFlow | protected |
 | `/dashboard` | Dashboard | protected |
-| `/dashboard/property` | PropertySetup | protected |
+| `/dashboard/property/:aptId` | PropertySetup | protected |
 | `/dashboard/bookings` | BookingManager | protected |
 | `/dashboard/qr` | QRCodePanel | protected |
 | `/dashboard/branding` | BrandingPanel | protected |
@@ -63,11 +63,15 @@ Colour presets for BrandingPanel are in `ARRIVLY_CONFIG.colourPresets`.
 - Text muted: `text-[#888]`
 
 ## Test Data (in DB)
+
+**Host: Anna Banana** (udy.bar.yosef@gmail.com) — owns two apartments:
+- **Sweet home** — id: `d9614d11-d573-4ff0-961a-54c5ea37c2bd`, Etu Töölö Helsinki, token: `ARR-SWEET1`. House rules AI-polished.
 - **Test Apartment 1** — id: `aaaaaaaa-0000-0000-0000-000000000001`, Kallio Helsinki, accent #5a1a2a (Wine)
-- **Test booking** — token: `ARR-TEST01`, check_in: 2026-05-27, check_out: 2026-05-31, guest: Udy
-- **Test URL:** `/guest?apt=aaaaaaaa-0000-0000-0000-000000000001&token=ARR-TEST01`
-- **Sweet home** — id: `d9614d11-d573-4ff0-961a-54c5ea37c2bd`, token: `ARR-ASJZ2R`
+
+**Host: Udyni** (udy.baryosef@jchelsinki.fi) — owns:
 - **Penthouse in the sky** — id: `9b03a763-3ca6-4d1f-946c-d4e1f977d614`, token: `ARR-PENTH1`
+
+**Test guest URL (Test Apartment 1):** `/guest?apt=aaaaaaaa-0000-0000-0000-000000000001&token=ARR-TEST01`
 
 ---
 
@@ -90,12 +94,12 @@ Full redesign to cream design system. All 12 screens. App live at arrivly.anna-s
 - [x] BrandingPanel — fixed accent_color bug (was querying brand_color, silent save failure)
 - [x] SUPABASE_SERVICE_ROLE_KEY added to Vercel env vars — unblocks all server-side API routes
 
-### Known bugs / tech debt
-- [ ] QR panel uses single canvasRef — only first apartment gets a real QR code
-- [ ] BrandingPanel — accent_color typed as `string` in interface, should be `string | null`
-- [ ] appUrl hardcoded in config.ts — should move to VITE_APP_URL env var
-- [ ] Product gap: house rules can be saved WITHOUT being AI-polished — "Rewrite with AI" is a manual button, not enforced before Save. Decide later: auto-rewrite on save, or block save until polished, or show an "unpolished" indicator.
-- [ ] PWA: a stale service-worker bundle persisted on mobile until cache was cleared; ensure a new deploy takes effect on next visit (handle in the PWA epic).
+### Known bugs / tech debt (session 3, updated)
+- [x] ~~QR panel uses single canvasRef~~ — RESOLVED `c01a050`: PropertyQRCard, own canvasRef per property
+- [x] ~~BrandingPanel accent_color typed as `string`~~ — RESOLVED `f9833f6`: now `string | null`
+- [x] ~~appUrl hardcoded in config.ts~~ — RESOLVED `f9833f6`: sourced from VITE_APP_URL with fallback
+- [x] ~~House rules manual-only rewrite~~ — RESOLVED `3af381d`: enforced on save, manual button removed
+- [ ] PWA stale service-worker — RESOLVED in Session 5 (`2c0c1f1`)
 
 ## Session 3 Status: COMPLETE ✓
 Core host flows working end-to-end. Guest page fully functional with token flow. Bookings addable manually and via iCal. My picks showing on guest Explore tab.
@@ -128,6 +132,32 @@ Geocoding live. House-rules AI rewrite live (gemini-2.5-flash). All guest naviga
 
 ---
 
+## Session 5 Progress (2026-05-30)
+
+### Completed
+- [x] Per-property QR codes — PropertyQRCard child component; each card owns its own canvasRef, download filename includes property name, print matches image to URL. `c01a050`
+- [x] R2 cleanups — `accent_color: string | null` in BrandingPanel; `appUrl` sourced from `VITE_APP_URL` env var with hardcoded fallback; `vite-env.d.ts` tightened to `string | undefined`. `f9833f6`
+- [x] Multi-property editing — PropertySetup loads by URL param `/dashboard/property/:aptId`; guard redirects to `/dashboard` on missing/unowned apt; form state reset on switch; `[aptId]` dep array. OnboardingFlow navigates directly to new property's edit page. `99082fa`
+- [x] Dashboard real counts + back link — Properties metric = real count; Bookings metric host-wide (`.in(aptIds)`); "Edit property" links to specific apt; "← Back to properties" link in PropertySetup; `neighborhood: string | null` type fix. `d6c468f`
+- [x] Overview consolidation — one rich card per property (completeness, Active/Draft pill, per-property booking count, QR/Preview/Edit); "My property" nav item + PropertyList.tsx removed; bare `/dashboard/property` route gone; all redirects point to `/dashboard`. `e491602`
+- [x] House rules: auto-polish enforced on save — manual "Rewrite with AI" button removed; saveRules calls `/api/rewrite-rules`, falls back to raw on failure, updates textarea with stored result. `3af381d`
+- [x] PWA stale-cache fix — sw.js bumped to arrivly-v2; navigation + `/index.html` network-first (cache fallback offline); `/assets/` stays cache-first; unconditional skipWaiting removed; SKIP_WAITING message handler + update-aware registration in main.tsx (reloads once on controllerchange, skips on first install). `2c0c1f1`
+- [x] PWA install prompt — InstallPrompt component (15s timer); Android one-tap via beforeinstallprompt; iOS Safari Share→Add instruction (Chrome/Firefox iOS excluded); dismissed state persisted to localStorage; shown in active guest page only. `2c0c1f1`
+- [x] Bookings multi-property — apartment dropdown (default first, one at a time) drives list, calendar, iCal panel, and add-booking form; fixed `.limit(1)` single-property bug; cancellation flag prevents stale-request overwrites; `saveIcalUrls` now has `host_id` guard. `35e88ba`
+- [x] Calendar month navigation — CalendarView: cursor state replaces frozen `new Date()`; ‹ / › buttons navigate via JS Date month±1 (year rollover automatic); today highlighted with ring in current month only. `c1be4a2`
+
+## Session 5 Status: COMPLETE ✓
+Full multi-property support (overview, bookings, editing). House-rules auto-polish. PWA stale-cache fixed. Calendar navigable.
+
+---
+
+## Known notes / minor debt
+- Re-saving house rules re-polishes already-polished text (Gemini call on every save). Minor; acceptable for now.
+- `BookingCalendar.tsx` is an unused stub; the real calendar is `CalendarView` inside `BookingManager.tsx`.
+- QR scans metric on Overview still shows "—" (not wired to any data source).
+
+---
+
 ## Workflow
 
 ### Claude in chat vs Claude Code
@@ -147,7 +177,8 @@ All pricing and plan settings live in `src/config.ts` only.
 
 ## Next up (Priority order)
 
-1. **Priority 3 — QR per-property fix**: QRCodePanel uses a single canvasRef so only the first property renders a real QR. Refactor so each property gets its own canvas/QR (e.g. keyed refs or a per-card QR component).
-2. **R2 cleanups**: type `accent_color` as `string | null` in BrandingPanel; move `appUrl` from `config.ts` to `VITE_APP_URL` env var.
-3. **PWA install prompt** on the guest page (after 15s) + service-worker update strategy (fix stale bundle on mobile).
-4. **Push notifications epic** — add VAPID keys to Vercel; push permission request + save subscription to `push_subscriptions`; real web-push in `api/send-push.ts` (currently a stub); notification triggers (`CRON_SECRET` needed).
+1. **Priority 4 — Push notifications epic.**
+   - **PREREQUISITE (Udy, in Vercel before any code):** generate VAPID keypair (`npx web-push generate-vapid-keys`) and add to Vercel env vars: `VITE_VAPID_PUBLIC_KEY` (public, browser-safe), `VAPID_PRIVATE_KEY` (secret, no VITE_ prefix), `VAPID_SUBJECT` (e.g. `mailto:udy.bar.yosef@gmail.com`).
+   - **4a** — Real `api/send-push.ts` via `web-push` library (dep already in package.json; `webpush.ts` client lib exists but has no callers; `sw.js` push + notificationclick handlers already in place).
+   - **4b** — Host opt-in UI: push permission request on dashboard; save subscription to `push_subscriptions` table.
+   - **4c** — Notification triggers: new booking (BookingManager); trial-ending + checkout-reminder crons need `CRON_SECRET` in Vercel.
