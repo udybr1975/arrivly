@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
 import { GoogleGenAI } from '@google/genai'
 
-const MODEL = 'gemini-2.0-flash'
+const MODEL = 'gemini-2.5-flash'
 
 const SYSTEM_PROMPT =
   "You rewrite short-term rental house rules to sound warm, friendly and welcoming to a guest. " +
