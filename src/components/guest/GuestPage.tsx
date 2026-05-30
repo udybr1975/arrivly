@@ -5,6 +5,7 @@ import {
   Copy, Check, RefreshCw, Navigation,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { getDirectionsUrl } from '../../lib/maps'
 import { ARRIVLY_CONFIG } from '../../config'
 
 interface Host {
@@ -92,10 +93,6 @@ function parseWifi(content: string): { network: string; password: string } {
     }
   }
   return { network: content.trim(), password: '' }
-}
-
-function mapsWalkingUrl(lat: number, lng: number): string {
-  return `https://maps.google.com/dir/?destination=${lat},${lng}&travelmode=walking`
 }
 
 function mapsSearchUrl(name: string, address?: string | null): string {
@@ -603,7 +600,7 @@ export default function GuestPage() {
 
             {apt.lat !== null && apt.lng !== null && (
               <a
-                href={mapsWalkingUrl(apt.lat, apt.lng)}
+                href={getDirectionsUrl(apt.lat, apt.lng)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-between w-full p-4 rounded-xl mb-6 text-white no-underline"
@@ -656,7 +653,7 @@ export default function GuestPage() {
                             <a
                               href={
                                 pick.lat !== null && pick.lng !== null
-                                  ? mapsWalkingUrl(pick.lat, pick.lng)
+                                  ? getDirectionsUrl(pick.lat, pick.lng)
                                   : mapsSearchUrl(pick.name, pick.address)
                               }
                               target="_blank"
@@ -719,7 +716,7 @@ export default function GuestPage() {
                                       <a
                                         href={
                                           place.lat !== undefined && place.lng !== undefined
-                                            ? mapsWalkingUrl(place.lat, place.lng)
+                                            ? getDirectionsUrl(place.lat, place.lng)
                                             : mapsSearchUrl(place.name, place.address)
                                         }
                                         target="_blank"
