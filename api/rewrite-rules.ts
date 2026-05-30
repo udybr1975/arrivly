@@ -55,15 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const result = response.text?.trim() || trimmed
 
     return res.status(200).json({ result })
-  } catch (err: unknown) {
-    const e = err as { name?: string; message?: string; status?: number; code?: string; statusText?: string }
-    console.error('[rewrite-rules] gemini call failed', {
-      name: e?.name,
-      message: e?.message?.slice(0, 120),
-      status: e?.status,
-      statusText: e?.statusText,
-      code: e?.code,
-    })
+  } catch {
     return res.status(502).json({ error: 'rewrite failed' })
   }
 }
