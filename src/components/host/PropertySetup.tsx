@@ -40,8 +40,6 @@ export default function PropertySetup() {
   const [checkin, setCheckin] = useState({ checkInFrom: '', checkOutBy: '', doorCode: '', entryInstructions: '' })
   // Tab 4
   const [rawRules, setRawRules] = useState('')
-  const [polishedRules, setPolishedRules] = useState('')
-  const [rewriting, setRewriting] = useState(false)
   // Tab 5
   const [extrasContent, setExtrasContent] = useState('')
   const [importing, setImporting] = useState(false)
@@ -74,7 +72,6 @@ export default function PropertySetup() {
       setWifi({ ssid: '', password: '' })
       setCheckin({ checkInFrom: '', checkOutBy: '', doorCode: '', entryInstructions: '' })
       setRawRules('')
-      setPolishedRules('')
       setExtrasContent('')
       setImportResult('')
 
@@ -279,30 +276,34 @@ export default function PropertySetup() {
   }
 
   // ── Tab 4 ──────────────────────────────────────────────────────────────────
-  async function rewriteRules() {
-    if (!rawRules.trim()) return
-    setRewriting(true)
-    try {
-      const data = await api.post<{ result: string }>('/rewrite-rules', { rawRules })
-      setPolishedRules(data.result ?? rawRules)
-    } catch {
-      setPolishedRules(rawRules)
-    }
-    setRewriting(false)
-  }
-
   async function saveRules() {
     if (!apartmentId) { showErr('Save Basic info first'); return }
+    if (!rawRules.trim()) return
     setSaving(true)
+
+    // Polish via Gemini on save. On any failure, fall back to the raw text so
+    // the host never loses their input.
+    let finalRules = rawRules
+    try {
+      const data = await api.post<{ result: string }>('/rewrite-rules', { rawRules })
+      if (data?.result && data.result.trim()) finalRules = data.result
+    } catch {
+      finalRules = rawRules
+    }
+
     await supabase.from('apartment_details').delete().eq('apartment_id', apartmentId).eq('category', 'House Rules')
     const { error } = await supabase.from('apartment_details').insert({
       apartment_id: apartmentId,
       category: 'House Rules',
-      content: polishedRules || rawRules,
+      content: finalRules,
       is_private: false,
     })
-    if (error) showErr(error.message)
-    else showOk()
+    if (error) {
+      showErr(error.message)
+    } else {
+      setRawRules(finalRules)
+      showOk()
+    }
     setSaving(false)
   }
 
@@ -564,7 +565,7 @@ export default function PropertySetup() {
       {tab === 'rules' && (
         <div className="bg-white border border-[#ddd8ce] rounded-[10px] p-4 space-y-3">
           <p className="text-[11px] text-[#888]">
-            Paste your raw rules. Gemini rewrites them in a warm, friendly tone with no bullet points.
+            Paste your house rules. When you save, they're automatically rewritten in a warm, friendly tone (no bullet points) and stored.
           </p>
           <div>
             <label className={LABEL}>Your raw rules</label>
@@ -576,21 +577,8 @@ export default function PropertySetup() {
               placeholder="No smoking inside. No parties. Keep quiet after 10pm. Check out by 11am. No pets."
             />
           </div>
-          <button onClick={rewriteRules} disabled={rewriting || !rawRules.trim()} className={BTN_AI}>
-            {rewriting ? 'Rewriting…' : '✦ Rewrite with AI'}
-          </button>
-          {(polishedRules || rewriting) && (
-            <div className="bg-[#f8f6f2] border border-[#ddd8ce] rounded-[8px] p-3">
-              <p className="text-[10px] uppercase tracking-[.06em] text-[#999] mb-2">AI result — preview</p>
-              {rewriting ? (
-                <p className="text-xs text-[#888] italic">Rewriting…</p>
-              ) : (
-                <p className="text-xs text-[#555] italic leading-relaxed font-serif">"{polishedRules}"</p>
-              )}
-            </div>
-          )}
           <button onClick={saveRules} disabled={saving || !rawRules.trim()} className={BTN_DARK}>
-            {saving ? 'Saving…' : 'Save rules'}
+            {saving ? 'Polishing & saving…' : 'Save rules'}
           </button>
         </div>
       )}
